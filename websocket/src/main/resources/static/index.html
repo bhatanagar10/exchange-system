@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .connection-status {
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .status-connected {
+            background: #4caf50;
+        }
+
+        .status-disconnected {
+            background: #f44336;
+        }
+
+        .status-connecting {
+            background: #ff9800;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-header {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .message-content {
+            background: white;
+            padding: 12px 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            word-wrap: break-word;
+        }
+
+        .message.join, .message.leave {
+            text-align: center;
+            font-style: italic;
+            color: #666;
+        }
+
+        .message.join .message-content,
+        .message.leave .message-content {
+            background: #e3f2fd;
+            display: inline-block;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>💬 WebSocket Chat</h1>
+            <div class="connection-status status-disconnected" id="status">Disconnected</div>
+        </div>
+        
+        <div class="chat-messages" id="messages"></div>
+        
+        <div class="chat-input-container">
+            <div id="errorContainer"></div>
+            <div class="input-group">
+                <input type="text" id="usernameInput" placeholder="Enter your username" value="User">
+            </div>
+            <div class="input-group">
+                <input type="text" id="messageInput" placeholder="Type your message..." disabled>
+                <button class="btn btn-primary" id="sendButton" onclick="sendMessage()" disabled>Send</button>
+                <button class="btn btn-secondary" id="connectButton" onclick="connect()">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let username = 'User';
+
+        function updateStatus(status, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = status;
+            statusEl.className = 'connection-status ' + className;
+        }
+
+        function showError(message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = '<div class="error-message">' + message + '</div>';
+            setTimeout(() => {
+                errorContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        function connect() {
+            username = document.getElementById('usernameInput').value.trim() || 'User';
+            
+            if (!username) {
+                showError('Please enter a username');
+                return;
+            }
+
+            updateStatus('Connecting...', 'status-connecting');
+            
+            // Use SockJS for connection
+            const socket = new SockJS('http://localhost:8081/ws');
+            stompClient = Stomp.over(socket);
+            
+            // Disable debug logging
+            stompClient.debug = null;
+            
+            stompClient.connect(
+                {
+                    login: 'admin',
+                    passcode: 'admin'
+                },
+                function(frame) {
+                    updateStatus('Connected', 'status-connected');
+                    console.log('Connected: ' + frame);
+                    
+                    // Enable input and send button
+                    document.getElementById('messageInput').disabled = false;
+                    document.getElementById('sendButton').disabled = false;
+                    document.getElementById('connectButton').disabled = true;
+                    document.getElementById('usernameInput').disabled = true;
+                    
+                    // Subscribe to public topic
+                    stompClient.subscribe('/topic/public', function(message) {
+                        const chatMessage = JSON.parse(message.body);
+                        displayMessage(chatMessage);
+                    });
+                    
+                    // Send join message
+                    const joinMessage = {
+                        sender: username,
+                        content: username + ' joined the chat',
+                        type: 'JOIN'
+                    };
+                    stompClient.send('/app/chat.addUser', {}, JSON.stringify(joinMessage));
+                },
+                function(error) {
+                    updateStatus('Connection Failed', 'status-disconnected');
+                    showError('Failed to connect: ' + error);
+                    console.error('Connection error: ', error);
+                }
+            );
+        }
+
+        function disconnect() {
+            if (stompClient !== null) {
+                stompClient.disconnect();
+            }
+            updateStatus('Disconnected', 'status-disconnected');
+            document.getElementById('messageInput').disabled = true;
+            document.getElementById('sendButton').disabled = true;
+            document.getElementById('connectButton').disabled = false;
+            document.getElementById('usernameInput').disabled = false;
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const content = messageInput.value.trim();
+            
+            if (content && stompClient) {
+                const chatMessage = {
+                    sender: username,
+                    content: content,
+                    type: 'CHAT'
+                };
+                
+                stompClient.send('/app/chat.sendMessage', {}, JSON.stringify(chatMessage));
+                messageInput.value = '';
+            }
+        }
+
+        function displayMessage(message) {
+            const messagesContainer = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + message.type.toLowerCase();
+            
+            if (message.type === 'JOIN' || message.type === 'LEAVE') {
+                messageDiv.innerHTML = `
+                    <div class="message-content">${message.content}</div>
+                `;
+            } else {
+                const timestamp = new Date().toLocaleTimeString();
+                messageDiv.innerHTML = `
+                    <div class="message-header">
+                        <strong>${escapeHtml(message.sender)}</strong> - ${timestamp}
+                    </div>
+                    <div class="message-content">${escapeHtml(message.content)}</div>
+                `;
+            }
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Allow Enter key to send message
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Allow Enter key to connect
+        document.getElementById('usernameInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                connect();
+            }
+        });
+    </script>
+</body>
+</html>
+

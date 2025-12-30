@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Book</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        .orderbook-container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .orderbook-header {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .connection-status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .status-connected {
+            background: #4caf50;
+        }
+
+        .status-disconnected {
+            background: #f44336;
+        }
+
+        .status-connecting {
+            background: #ff9800;
+        }
+
+        .orderbook-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .sell-orders .section-title {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+        }
+
+        .buy-orders .section-title {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+        }
+
+        .orders-line {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 2px;
+            overflow-x: auto;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+        }
+
+        .order-item {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid;
+            transition: all 0.3s;
+        }
+
+        .order-item:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .sell-orders .order-item {
+            border-left-color: #f44336;
+        }
+
+        .buy-orders .order-item {
+            border-left-color: #4caf50;
+        }
+
+        .order-price {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .sell-orders .order-price {
+            color: #f44336;
+        }
+
+        .buy-orders .order-price {
+            color: #4caf50;
+        }
+
+        .order-quantity {
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .order-user-id {
+            font-size: 10px;
+            color: #888;
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .order-details {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .no-orders {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+            font-style: italic;
+        }
+
+        .market-selector {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .market-selector select {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .market-selector select option {
+            background: #1a1a1a;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="orderbook-container">
+        <div class="orderbook-header">
+            📊 Order Book
+            <span class="connection-status status-disconnected" id="status">Disconnected</span>
+        </div>
+
+
+        <div class="orderbook-section sell-orders">
+            <div class="section-title">🔴 SELL ORDERS</div>
+            <div class="orders-line" id="sellOrders"></div>
+        </div>
+
+        <div class="orderbook-section buy-orders">
+            <div class="section-title">🟢 BUY ORDERS</div>
+            <div class="orders-line" id="buyOrders"></div>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let orderBookData = null;
+
+        function updateStatus(status, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = status;
+            statusEl.className = 'connection-status ' + className;
+        }
+
+        function connect() {
+            updateStatus('Connecting...', 'status-connecting');
+            
+            const socket = new SockJS('http://localhost:8081/ws');
+            stompClient = Stomp.over(socket);
+            stompClient.debug = null;
+            
+            stompClient.connect(
+                {
+                    login: 'admin',
+                    passcode: 'admin'
+                },
+                function(frame) {
+                    updateStatus('Connected', 'status-connected');
+                    console.log('Connected: ' + frame);
+                    
+                    // Subscribe to public topic
+                    stompClient.subscribe('/topic/public', function(message) {
+                        try {
+                            const data = JSON.parse(message.body);
+                            orderBookData = data;
+                            updateOrderBook();
+                        } catch (e) {
+                            console.error('Error parsing message:', e);
+                        }
+                    });
+                },
+                function(error) {
+                    updateStatus('Connection Failed', 'status-disconnected');
+                    console.error('Connection error: ', error);
+                }
+            );
+        }
+
+        function updateOrderBook() {
+            if (!orderBookData) {
+                document.getElementById('sellOrders').innerHTML = '<div class="no-orders">No data available</div>';
+                document.getElementById('buyOrders').innerHTML = '<div class="no-orders">No data available</div>';
+                return;
+            }
+
+            // Data is already sorted from Java - display as received
+            const sellOrders = orderBookData.sellOrders || [];
+            const buyOrders = orderBookData.buyOrders || [];
+            
+            // Display sell orders (already sorted - highest price first)
+            displayOrders('sellOrders', sellOrders, '#f44336');
+            
+            // Display buy orders (already sorted - highest price first)
+            displayOrders('buyOrders', buyOrders, '#4caf50');
+        }
+
+        function displayOrders(containerId, orders, color) {
+            const container = document.getElementById(containerId);
+            
+            if (orders.length === 0) {
+                container.innerHTML = '<div class="no-orders">No orders</div>';
+                return;
+            }
+            
+            container.innerHTML = orders.map(order => `
+                <div class="order-item" style="border-left-color: ${color}">
+                    <div class="order-price" style="color: ${color}">
+                        $${formatPrice(order.price)}
+                    </div>
+                    <div class="order-details">
+                        <div class="order-quantity">
+                            ${formatQuantity(order.quantity)}
+                        </div>
+                        ${order.userId ? `<div class="order-user-id">${formatUserId(order.userId)}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatPrice(price) {
+            return price.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        function formatQuantity(quantity) {
+            return quantity.toLocaleString();
+        }
+
+        function formatUserId(userId) {
+            if (!userId) return '';
+            // Show first 8 characters of UUID for brevity
+            return userId.substring(0, 8) + '...';
+        }
+
+        // Auto-connect on page load
+        connect();
+    </script>
+</body>
+</html>
+
