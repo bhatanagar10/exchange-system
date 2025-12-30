@@ -1,0 +1,73 @@
+package com.trading.bot.service;
+
+import com.trading.bot.config.TradingBotConfig;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Service to create users in the exchange via API.
+ */
+@Slf4j
+@Service
+public class UserService {
+
+    private final RestTemplate restTemplate;
+    private final TradingBotConfig config;
+
+    public UserService(RestTemplate restTemplate, TradingBotConfig config) {
+        this.restTemplate = restTemplate;
+        this.config = config;
+    }
+
+    /**
+     * Register a new user in the exchange and return the generated UUID.
+     */
+    public UUID registerUser(String name, BigDecimal initialBalance) {
+        try {
+            String baseUrl = config.getExchange().getApiUrl();
+            String registerUrl = baseUrl + "/account/register";
+            
+            Map<String, Object> request = new HashMap<>();
+            request.put("initialBalance", initialBalance.doubleValue());
+            
+            Map<String, Object> response = restTemplate.postForObject(registerUrl, request, Map.class);
+            
+            if (response != null && response.containsKey("userId")) {
+                String userIdStr = response.get("userId").toString();
+                UUID userId = UUID.fromString(userIdStr);
+                log.info("Registered user '{}' in exchange with ID: {}", name, userId);
+                return userId;
+            }
+            
+            throw new RuntimeException("Exchange did not return userId");
+            
+        } catch (Exception e) {
+            log.error("Failed to register user '{}' in exchange: {}", name, e.getMessage(), e);
+            throw new RuntimeException("Failed to register user in exchange", e);
+        }
+    }
+
+    /**
+     * Check if user exists in exchange.
+     */
+    public boolean userExists(UUID userId) {
+        try {
+            String baseUrl = config.getExchange().getApiUrl();
+            String checkUrl = baseUrl + "/account/" + userId + "/exists";
+            
+            Boolean exists = restTemplate.getForObject(checkUrl, Boolean.class);
+            return exists != null && exists;
+            
+        } catch (Exception e) {
+            log.warn("Failed to check if user {} exists: {}", userId, e.getMessage());
+            return false;
+        }
+    }
+}
+

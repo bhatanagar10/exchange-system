@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: trading-bot-test
+  
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+trading-bot:
+  exchange:
+    api-url: http://localhost:8080/api
+    timeout: 1000
+  
+  execution:
+    thread-pool-size: 2
+    rate-limit-per-minute: 10
+    bot-execution-interval-ms: 60000
+  
+  simulation:
+    default-trading-pair: BTC/USDT
+    min-order-size: 1
+    max-order-size: 10
+    initial-bot-balance: 10000.0
+  
+  behavior:
+    reaction-delay-min-ms: 100
+    reaction-delay-max-ms: 500
+    skip-trade-probability: 0.05
+    order-size-variance: 0.10
+    price-slippage-percent: 0.001
+    mistake-probability: 0.01
+    inactive-period-probability: 0.01
+
+logging:
+  level:
+    com.trading.bot: WARN
+
