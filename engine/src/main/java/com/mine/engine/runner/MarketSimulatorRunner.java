@@ -8,7 +8,7 @@ import com.mine.engine.model.OrderExecutionType;
 import com.mine.engine.model.OrderType;
 import com.mine.engine.service.StockDataService;
 import com.mine.engine.service.UserService;
-import com.mine.engine.service.rabbitmq.MessageProducer;
+import com.mine.engine.service.kafka.OrderEventProducer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -25,9 +25,9 @@ public class MarketSimulatorRunner {
 
     private final UserService userService;
     private final StockDataService stockDataService;
-    private final MessageProducer producer;
+    private final OrderEventProducer producer;
 
-    public MarketSimulatorRunner(UserService userService, StockDataService stockDataService, MessageProducer producer) {
+    public MarketSimulatorRunner(UserService userService, StockDataService stockDataService, OrderEventProducer producer) {
         this.userService = userService;
         this.stockDataService = stockDataService;
         this.producer = producer;
