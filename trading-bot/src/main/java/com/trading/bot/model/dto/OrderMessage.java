@@ -6,7 +6,7 @@ import lombok.*;
 import java.util.UUID;
 
 /**
- * Message format for sending orders to the exchange via RabbitMQ.
+ * Message format for sending orders to the exchange via Kafka.
  * Matches the engine's Message model structure exactly.
  */
 @Getter

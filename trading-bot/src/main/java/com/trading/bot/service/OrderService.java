@@ -1,27 +1,25 @@
 package com.trading.bot.service;
 
-import com.trading.bot.config.RabbitMQConfig;
+import com.trading.bot.config.KafkaConfig;
 import com.trading.bot.model.Bot;
 import com.trading.bot.model.dto.OrderMessage;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 
 /**
- * Simplified Order Service - Places orders via RabbitMQ.
+ * Simplified Order Service - Places orders via Kafka.
  */
 @Slf4j
 @Service
 public class OrderService {
 
-    private final RabbitTemplate rabbitTemplate;
-    private final RabbitMQConfig rabbitMQConfig;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public OrderService(RabbitTemplate rabbitTemplate, RabbitMQConfig rabbitMQConfig) {
-        this.rabbitTemplate = rabbitTemplate;
-        this.rabbitMQConfig = rabbitMQConfig;
+    public OrderService(KafkaTemplate<String, Object> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     /**
@@ -37,11 +35,7 @@ public class OrderService {
                     .orderType(isBuy ? OrderMessage.OrderType.BUY : OrderMessage.OrderType.SELL)
                     .build();
 
-            rabbitTemplate.convertAndSend(
-                    rabbitMQConfig.getOrderExchange(),
-                    rabbitMQConfig.getOrderRoutingKey(),
-                    orderMessage
-            );
+            kafkaTemplate.send(KafkaConfig.ORDER_EVENTS_TOPIC, orderMessage);
 
             return true;
             

@@ -17,7 +17,7 @@ import java.math.BigDecimal;
 public class TradingBotConfig {
 
     private Exchange exchange = new Exchange();
-    private RabbitMQ rabbitmq = new RabbitMQ();
+    private Kafka kafka = new Kafka();
     private Execution execution = new Execution();
     private Strategy strategy = new Strategy();
     private Simulation simulation = new Simulation();
@@ -35,10 +35,8 @@ public class TradingBotConfig {
 
     @Getter
     @Setter
-    public static class RabbitMQ {
-        private String exchange = "engine.test.exchange";
-        private String routingKey = "engine.test.routing.key";
-        private String queue = "engine.test.queue";
+    public static class Kafka {
+        private String topic = "order-events";
     }
 
     @Getter
