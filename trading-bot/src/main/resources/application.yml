@@ -2,7 +2,15 @@ spring:
   application:
     name: trading-bot
   
-  # Kafka Configuration
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: admin
+    virtual-host: /
+
+    # Kafka Configuration
   kafka:
     bootstrap-servers: localhost:9072
     producer:
@@ -32,6 +40,11 @@ trading-bot:
     max-retries: 3
     retry-delay-ms: 1000
   
+  rabbitmq:
+    exchange: engine.test.exchange
+    routing-key: engine.test.routing.key
+    queue: engine.test.queue
+
   kafka:
     topic: order-events
   

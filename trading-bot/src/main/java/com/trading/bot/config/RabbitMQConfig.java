@@ -32,18 +32,18 @@ public class RabbitMQConfig {
         return rabbitTemplate;
     }
 
-    /**
-     * Get the exchange name for order submission.
-     */
-    public String getOrderExchange() {
-        return tradingBotConfig.getRabbitmq().getExchange();
-    }
-
-    /**
-     * Get the routing key for order submission.
-     */
-    public String getOrderRoutingKey() {
-        return tradingBotConfig.getRabbitmq().getRoutingKey();
-    }
+//    /**
+//     * Get the exchange name for order submission.
+//     */
+//    public String getOrderExchange() {
+//        return tradingBotConfig.getRabbitmq().getExchange();
+//    }
+//
+//    /**
+//     * Get the routing key for order submission.
+//     */
+//    public String getOrderRoutingKey() {
+//        return tradingBotConfig.getRabbitmq().getRoutingKey();
+//    }
 }
 
