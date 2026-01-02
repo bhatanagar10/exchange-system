@@ -11,11 +11,14 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 
 @Service
+@ConditionalOnProperty(name = "messaging.provider", havingValue = "rabbitmq", matchIfMissing = false)
+@Deprecated
 public class MessageConsumer {
 
     private final StockService stockService;

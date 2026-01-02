@@ -4,9 +4,12 @@ import com.mine.engine.config.RabbitMQConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
+@ConditionalOnProperty(name = "messaging.provider", havingValue = "rabbitmq", matchIfMissing = false)
+@Deprecated
 public class MessageProducer {
 
     private static final Logger logger = LoggerFactory.getLogger(MessageProducer.class);

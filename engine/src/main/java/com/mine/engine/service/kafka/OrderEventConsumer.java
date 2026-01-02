@@ -11,13 +11,17 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
  * Kafka consumer for processing order events.
  * Processes buy/sell orders synchronously with manual acknowledgment.
+ * @deprecated Use {@link com.mine.engine.service.messaging.impl.KafkaMessageConsumer} instead
  */
 @Service
+@ConditionalOnProperty(name = "messaging.provider", havingValue = "kafka", matchIfMissing = true)
+@Deprecated
 public class OrderEventConsumer {
 
     private final StockService stockService;

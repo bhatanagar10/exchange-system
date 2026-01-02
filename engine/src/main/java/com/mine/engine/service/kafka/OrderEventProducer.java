@@ -4,12 +4,16 @@ import com.mine.engine.config.KafkaConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
  * Kafka producer for sending order events.
+ * @deprecated Use {@link com.mine.engine.service.messaging.impl.KafkaMessageProducer} instead
  */
 @Service
+@ConditionalOnProperty(name = "messaging.provider", havingValue = "kafka", matchIfMissing = true)
+@Deprecated
 public class OrderEventProducer {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderEventProducer.class);
