@@ -1,6 +1,5 @@
 package com.mine.engine.runner;
 
-import com.mine.engine.model.Market;
 import com.mine.engine.model.OrderExecutionType;
 import com.mine.engine.service.StockService;
 import com.mine.engine.service.UserService;
@@ -8,8 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-
-import java.util.UUID;
 
 /**
  * Seeds the order book with initial market maker orders on startup.
@@ -50,7 +47,7 @@ public class OrderBookSeeder implements CommandLineRunner {
         
         try {
             // Create market maker users
-            UUID[] marketMakerIds = createMarketMakerUsers();
+            Long[] marketMakerIds = createMarketMakerUsers();
             
             // Seed buy orders (below reference price)
             seedBuyOrders(marketMakerIds);
@@ -70,8 +67,8 @@ public class OrderBookSeeder implements CommandLineRunner {
     /**
      * Create market maker users with sufficient balance.
      */
-    private UUID[] createMarketMakerUsers() {
-        UUID[] userIds = new UUID[MARKET_MAKER_COUNT];
+    private Long[] createMarketMakerUsers() {
+        Long[] userIds = new Long[MARKET_MAKER_COUNT];
         
         // Each market maker needs enough balance for their orders
         // 4 buy orders * $500 * 1 quantity = $2000 per maker
@@ -79,7 +76,7 @@ public class OrderBookSeeder implements CommandLineRunner {
         double initialBalance = 10000.0; // $10,000 per market maker
         
         for (int i = 0; i < MARKET_MAKER_COUNT; i++) {
-            UUID userId = userService.addUser(initialBalance);
+            Long userId = userService.addUser(initialBalance);
             userIds[i] = userId;
             log.info("Created market maker {}: {} with balance ${}", i + 1, userId, initialBalance);
         }
@@ -91,7 +88,7 @@ public class OrderBookSeeder implements CommandLineRunner {
      * Seed buy orders below reference price.
      * Places orders at -0.5%, -1%, -1.5%, -2% from reference.
      */
-    private void seedBuyOrders(UUID[] marketMakerIds) {
+    private void seedBuyOrders(Long[] marketMakerIds) {
         log.info("Seeding BUY orders below reference price...");
         
         int makerIndex = 0;
@@ -99,14 +96,15 @@ public class OrderBookSeeder implements CommandLineRunner {
             double buyPrice = REFERENCE_PRICE * (1 - tierPercent);
             buyPrice = Math.round(buyPrice * 100.0) / 100.0; // Round to 2 decimals
             
-            UUID makerId = marketMakerIds[makerIndex % MARKET_MAKER_COUNT];
+            Long makerId = marketMakerIds[makerIndex % MARKET_MAKER_COUNT];
             
             try {
                 String result = stockService.placeBuyOrder(
                         makerId,
                         buyPrice,
                         QUANTITY_PER_ORDER,
-                        OrderExecutionType.LIMIT
+                        OrderExecutionType.LIMIT,
+                        System.currentTimeMillis() // Use current timestamp for seeding
                 );
                 
                 log.info("  BUY order: {} @ ${} ({}% below reference) - {}", 
@@ -125,14 +123,14 @@ public class OrderBookSeeder implements CommandLineRunner {
      * Places orders at +0.5%, +1%, +1.5%, +2% from reference.
      * First, give market makers some BTC holdings to sell.
      */
-    private void seedSellOrders(UUID[] marketMakerIds) {
+    private void seedSellOrders(Long[] marketMakerIds) {
         log.info("Seeding SELL orders above reference price...");
         
         // First, give each market maker BTC holdings directly
         // They need at least 4 BTC (one per sell order)
         long btcPerMaker = TIER_PERCENTAGES.length; // One BTC per tier
         
-        for (UUID makerId : marketMakerIds) {
+        for (Long makerId : marketMakerIds) {
             try {
                 // Get user and add BTC holdings directly
                 com.mine.engine.model.User user = userService.getUser(makerId);
@@ -155,14 +153,15 @@ public class OrderBookSeeder implements CommandLineRunner {
             double sellPrice = REFERENCE_PRICE * (1 + tierPercent);
             sellPrice = Math.round(sellPrice * 100.0) / 100.0; // Round to 2 decimals
             
-            UUID makerId = marketMakerIds[makerIndex % MARKET_MAKER_COUNT];
+            Long makerId = marketMakerIds[makerIndex % MARKET_MAKER_COUNT];
             
             try {
                 String result = stockService.placeSellOrder(
                         makerId,
                         sellPrice,
                         QUANTITY_PER_ORDER,
-                        OrderExecutionType.LIMIT
+                        OrderExecutionType.LIMIT,
+                        System.currentTimeMillis() // Use current timestamp for seeding
                 );
                 
                 log.info("  SELL order: {} @ ${} ({}% above reference) - {}", 

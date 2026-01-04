@@ -5,7 +5,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.UUID;
 
 /**
  * DTO for order data sent to WebSocket clients
@@ -19,6 +18,6 @@ public class OrderDTO implements Serializable {
     
     private double price;
     private long quantity;
-    private UUID userId;
+    private Long userId;
 }
 

@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * Initialize 5-6 bots that trade aggressively.
@@ -54,7 +53,7 @@ public class BotInitializationConfig {
                     String strategy = strategies[i];
                     
                     // Register user in exchange first
-                    UUID userId = userService.registerUser(name, initialBalance);
+                    Long userId = userService.registerUser(name, initialBalance);
                     
                     // Create bot
                     Bot bot = Bot.builder()

@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * UserService - Manages user creation and retrieval
@@ -25,14 +24,14 @@ import java.util.UUID;
 @Service
 public class UserService {
 
-    private final Map<UUID, User> userData; // Injected singleton map for in-memory cache (User model)
+    private final Map<Long, User> userData; // Injected singleton map for in-memory cache (User model)
     private final UserRepository userRepository; // Repository for database operations (UserEntity)
 
     /**
      * Constructor with dependency injection of singleton userData map and repository
      * All classes that inject userData will get the same instance
      */
-    public UserService(Map<UUID, User> userData, UserRepository userRepository) {
+    public UserService(Map<Long, User> userData, UserRepository userRepository) {
         this.userData = userData;
         this.userRepository = userRepository;
         log.info("UserService initialized with singleton userData map and UserRepository");
@@ -76,7 +75,7 @@ public class UserService {
      * @throws Exception if user already exists
      */
     @Transactional
-    public UUID addUser(double initialCash) {
+    public Long addUser(double initialCash) {
         
         // Create user entity for database
         UserEntity userEntity = new UserEntity();
@@ -98,7 +97,7 @@ public class UserService {
         userEntity = userRepository.save(userEntity);
         
         // Get the database-generated or set ID
-        UUID dbUserId = userEntity.getId();
+        Long dbUserId = userEntity.getId();
         log.info("User saved to database - ID: {}, Initial Cash: {}", dbUserId, initialCash);
         
         // Convert entity to cache model and add to in-memory cache
@@ -114,10 +113,10 @@ public class UserService {
     /**
      * Get user by ID
      * 
-     * @param userId The UUID of the user
+     * @param userId The Long ID of the user
      * @return The user object, or null if not found
      */
-    public User getUser(UUID userId) {
+    public User getUser(Long userId) {
         return userData.get(userId);
     }
     

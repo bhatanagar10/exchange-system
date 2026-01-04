@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -285,8 +284,8 @@ public class MarketController {
         private long id;
         private double price;
         private long quantity;
-        private UUID buyerId;
-        private UUID sellerId;
+        private Long buyerId;
+        private Long sellerId;
         private long timestamp;
     }
 

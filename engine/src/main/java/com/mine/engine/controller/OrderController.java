@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * REST Controller for Order Management APIs.
@@ -32,7 +31,7 @@ public class OrderController {
      */
     @PostMapping("/{userId}/cancel")
     public ResponseEntity<CancelOrderResponse> cancelOrder(
-            @PathVariable UUID userId,
+            @PathVariable Long userId,
             @RequestBody CancelOrderRequest request) {
         
         try {
@@ -71,7 +70,7 @@ public class OrderController {
 
     @lombok.Data
     public static class CancelOrderResponse {
-        private UUID userId;
+        private Long userId;
         private String orderType;
         private String message;
         private boolean success;

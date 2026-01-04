@@ -267,7 +267,7 @@
                         <div class="order-quantity">
                             ${formatQuantity(order.quantity)}
                         </div>
-                        ${order.userId ? `<div class="order-user-id">${formatUserId(order.userId)}</div>` : ''}
+                        ${order.userId ? `<div class="order-user-id">${order.userId}</div>` : ''}
                     </div>
                 </div>
             `).join('');

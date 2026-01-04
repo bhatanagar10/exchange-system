@@ -84,13 +84,13 @@ public class OrderEventConsumer {
                 // Simulate buy order processing
                 logger.info("Processing BUY order for user : {}", message.getUserId());
                 stockService.placeBuyOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
-                        message.getOrderExecutionType());
+                        message.getOrderExecutionType(), message.getTimestamp());
                 break;
             case SELL:
                 // Simulate sell order processing
                 logger.info("Processing SELL order for user: {}", message.getUserId());
                 stockService.placeSellOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
-                        message.getOrderExecutionType());
+                        message.getOrderExecutionType(), message.getTimestamp());
                 break;
             default:
                 logger.warn("Unknown order type: {}", message.getOrderType());

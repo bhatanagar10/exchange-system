@@ -77,7 +77,7 @@ public class OrderBookService {
      * Check if a user has active orders in the order book.
      * Note: This is a simplified check - we'll track orders in bot state instead.
      */
-    public boolean hasUserOrder(UUID userId, String tradingPair, boolean isBuy) {
+    public boolean hasUserOrder(Long userId, String tradingPair, boolean isBuy) {
         // We'll track this in bot state instead of querying exchange
         // This method is kept for future use if needed
         return false;

@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class InMemoryBotStorage {
 
     private final Map<Long, Bot> botsById = new ConcurrentHashMap<>();
-    private final Map<UUID, Bot> botsByUserId = new ConcurrentHashMap<>();
+    private final Map<Long, Bot> botsByUserId = new ConcurrentHashMap<>();
 
     /**
      * Save a bot (create or update).
@@ -41,7 +41,7 @@ public class InMemoryBotStorage {
     /**
      * Find bot by user ID.
      */
-    public Optional<Bot> findByUserId(UUID userId) {
+    public Optional<Bot> findByUserId(Long userId) {
         return Optional.ofNullable(botsByUserId.get(userId));
     }
 

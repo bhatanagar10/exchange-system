@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -24,7 +23,7 @@ public class UserDataConfig {
      * All classes that inject this will get the same instance
      */
     @Bean
-    public Map<UUID, User> userData() {
+    public Map<Long, User> userData() {
         return new ConcurrentHashMap<>();
     }
     

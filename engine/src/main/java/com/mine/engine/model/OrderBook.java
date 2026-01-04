@@ -23,11 +23,11 @@ public class OrderBook implements Serializable {
         this.buyOrders = new PriorityQueue<>(Comparator
                 .comparing(Order::getPrice)
                 .reversed()
-                .thenComparing(Order::getId)); // If same price, earlier order first
+                .thenComparing(Order::getId)); // If same price, compare by order ID (string comparison)
         
         // Sell orders: Min heap - lowest price has highest priority
         this.sellOrders = new PriorityQueue<>(Comparator
                 .comparing(Order::getPrice)
-                .thenComparing(Order::getId)); // If same price, earlier order first
+                .thenComparing(Order::getId)); // If same price, compare by order ID (string comparison)
     }
 }

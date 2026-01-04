@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -221,7 +220,7 @@ public class StockDataService {
      * @param orderType The order type (BUY or SELL) to match
      * @return The removed order, or null if not found
      */
-    public Order removeOrderByUser(Market market, UUID userId, OrderType orderType) {
+    public Order removeOrderByUser(Market market, Long userId, OrderType orderType) {
         OrderBook orderBook = stockData.get(market);
         if (orderBook == null) {
             return null;

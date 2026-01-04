@@ -4,7 +4,6 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -21,7 +20,7 @@ public class Bot {
     private static final AtomicLong idCounter = new AtomicLong(1);
     
     private Long id;
-    private UUID userId;  // Exchange user ID (created via API)
+    private Long userId;  // Exchange user ID (created via API)
     private String name;
     private String tradingPair;
     private BigDecimal balance;

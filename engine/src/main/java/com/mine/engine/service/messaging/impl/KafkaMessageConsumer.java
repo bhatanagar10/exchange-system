@@ -2,6 +2,7 @@ package com.mine.engine.service.messaging.impl;
 
 import com.mine.engine.config.KafkaConfig;
 import com.mine.engine.model.Message;
+import com.mine.engine.service.KafkaOffsetTracker;
 import com.mine.engine.service.StockService;
 import com.mine.engine.service.messaging.MessageConsumer;
 import com.mine.engine.utils.Utils;
@@ -24,11 +25,13 @@ public class KafkaMessageConsumer implements MessageConsumer {
 
     private final StockService stockService;
     private final Utils utils;
+    private final KafkaOffsetTracker offsetTracker;
     private static final Logger logger = LoggerFactory.getLogger(KafkaMessageConsumer.class);
 
-    public KafkaMessageConsumer(StockService stockService, Utils utils) {
+    public KafkaMessageConsumer(StockService stockService, Utils utils, KafkaOffsetTracker offsetTracker) {
         this.stockService = stockService;
         this.utils = utils;
+        this.offsetTracker = offsetTracker;
     }
 
     /**
@@ -51,14 +54,14 @@ public class KafkaMessageConsumer implements MessageConsumer {
             processMessage(message);
             
             // Manual acknowledgment - NEXT MESSAGE WILL BE DELIVERED AFTER THIS ACK
-            acknowledgeMessage(acknowledgment);
+            acknowledgeMessage(acknowledgment, partition, offset);
             
         } catch (Exception e) {
             logger.error("Error processing message from partition {} at offset {}: {}", 
                     partition, offset, e.getMessage(), e);
             // Acknowledge even on error to prevent infinite retries
             // In production, you might want to send to a dead letter topic instead
-            acknowledgeMessage(acknowledgment);
+            acknowledgeMessage(acknowledgment, partition, offset);
         }
     }
 
@@ -70,12 +73,12 @@ public class KafkaMessageConsumer implements MessageConsumer {
             case BUY:
                 logger.info("Processing BUY order for user : {}", message.getUserId());
                 stockService.placeBuyOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
-                        message.getOrderExecutionType());
+                        message.getOrderExecutionType(), message.getTimestamp());
                 break;
             case SELL:
                 logger.info("Processing SELL order for user: {}", message.getUserId());
                 stockService.placeSellOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
-                        message.getOrderExecutionType());
+                        message.getOrderExecutionType(), message.getTimestamp());
                 break;
             default:
                 logger.warn("Unknown order type: {}", message.getOrderType());
@@ -83,10 +86,12 @@ public class KafkaMessageConsumer implements MessageConsumer {
         utils.printStockData();
     }
     
-    private void acknowledgeMessage(Acknowledgment acknowledgment) {
+    private void acknowledgeMessage(Acknowledgment acknowledgment, int partition, long offset) {
         logger.info("Sending manual ACK via Kafka");
         acknowledgment.acknowledge();
-        logger.info("Message acknowledged successfully - Kafka will now deliver next message");
+        // Track the offset after acknowledgment (offset is the last processed offset)
+        offsetTracker.updateOffset(partition, offset);
+        logger.info("Message acknowledged successfully - Kafka will now deliver next message. Tracked offset: partition {} offset {}", partition, offset);
     }
 }
 

@@ -8,7 +8,6 @@ import com.mine.engine.service.StockDataService;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -18,13 +17,13 @@ import java.util.concurrent.atomic.AtomicLong;
 public abstract class AbstractOrderExecutionStrategy implements OrderExecutionStrategy {
     
     protected final StockDataService stockDataService;
-    protected final Map<UUID, User> userData;
+    protected final Map<Long, User> userData;
     protected final List<Transaction> transactions;
     protected final AtomicLong transactionIdCounter;
     
     protected AbstractOrderExecutionStrategy(
             StockDataService stockDataService,
-            Map<UUID, User> userData,
+            Map<Long, User> userData,
             List<Transaction> transactions,
             AtomicLong transactionIdCounter) {
         this.stockDataService = stockDataService;

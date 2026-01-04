@@ -3,8 +3,6 @@ package com.trading.bot.model.dto;
 import com.trading.bot.model.OrderExecutionType;
 import lombok.*;
 
-import java.util.UUID;
-
 /**
  * Message format for sending orders to the exchange via Kafka.
  * Matches the engine's Message model structure exactly.
@@ -16,11 +14,12 @@ import java.util.UUID;
 @Builder
 public class OrderMessage {
 
-    private UUID userId;
+    private Long userId;
     private double price;
     private long quantity;
     private OrderExecutionType orderExecutionType;
     private OrderType orderType;
+    private Long timestamp; // Timestamp when order was placed (datetime at which order was placed)
     
     public enum OrderType {
         BUY, SELL

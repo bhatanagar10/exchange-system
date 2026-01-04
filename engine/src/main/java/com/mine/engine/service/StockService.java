@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.mine.engine.model.Market.BTC;
@@ -27,12 +26,13 @@ import static com.mine.engine.model.Market.BTC;
 @Service
 public class StockService {
 
+    private static final String ORDER_ID_PREFIX = "ORD-";
+
     private final StockDataService stockDataService;
-    private final Map<UUID, User> userData; // Injected singleton map
+    private final Map<Long, User> userData; // Injected singleton map
     private final List<Transaction> transactions; // Injected singleton list
 
-    // Order and transaction counters
-    private AtomicLong orderIdCounter;
+    // Transaction counter (order ID is now generated from userId + timestamp)
     private AtomicLong transactionIdCounter;
     
     // Strategy map for order execution
@@ -42,7 +42,7 @@ public class StockService {
      * Constructor with dependency injection of singleton data structures
      * All classes that inject stockDataService, userData, and transactions will get the same instances
      */
-    public StockService(StockDataService stockDataService, Map<UUID, User> userData, List<Transaction> transactions) {
+    public StockService(StockDataService stockDataService, Map<Long, User> userData, List<Transaction> transactions) {
         // Inject the stock data service
         this.stockDataService = stockDataService;
         
@@ -52,8 +52,7 @@ public class StockService {
         // Inject the singleton transactions list
         this.transactions = transactions;
         
-        // Initialize order and transaction counters
-        this.orderIdCounter = new AtomicLong(1);
+        // Initialize transaction counter (order ID is now generated from userId + timestamp)
         this.transactionIdCounter = new AtomicLong(1);
         
         // Initialize execution strategies
@@ -67,10 +66,22 @@ public class StockService {
                 Market.values().length);
     }
 
-    // Place a buy order
-    public String placeBuyOrder(UUID userId, double price , long quantity, OrderExecutionType orderExecutionType)  {
+    /**
+     * Generate order ID in format: ORD-{userId}-{timestamp}
+     */
+    private String generateOrderId(Long userId, Long timestamp) {
+        return ORDER_ID_PREFIX + userId + "-" + timestamp;
+    }
 
-        Order buyOrder = new Order(orderIdCounter.getAndIncrement(), userId,
+    // Place a buy order
+    public String placeBuyOrder(Long userId, double price, long quantity, OrderExecutionType orderExecutionType, Long timestamp)  {
+        
+        if (timestamp == null) {
+            throw new IllegalArgumentException("Timestamp is required for order creation");
+        }
+        
+        String orderId = generateOrderId(userId, timestamp);
+        Order buyOrder = new Order(orderId, userId,
                 OrderType.BUY, orderExecutionType, price, quantity, BTC);
 
         List<Transaction> executedTransactions = new ArrayList<>();
@@ -92,14 +103,19 @@ public class StockService {
     }
 
     // Place a sell order
-    public String placeSellOrder(UUID userId, double price ,long quantity, OrderExecutionType orderExecutionType) {
+    public String placeSellOrder(Long userId, double price, long quantity, OrderExecutionType orderExecutionType, Long timestamp) {
 
+        if (timestamp == null) {
+            throw new IllegalArgumentException("Timestamp is required for order creation");
+        }
+        
         User user = userData.get(userId);
 
         // Reserve/deduct stocks for the order
         user.getMarkets().put(BTC, user.getMarkets().get(BTC) - quantity);
 
-        Order sellOrder = new Order(orderIdCounter.getAndIncrement(), userId,
+        String orderId = generateOrderId(userId, timestamp);
+        Order sellOrder = new Order(orderId, userId,
                 OrderType.SELL, orderExecutionType, price, quantity, BTC);
 
         List<Transaction> executedTransactions = new ArrayList<>();
@@ -125,7 +141,7 @@ public class StockService {
      * Cancel an order for a user.
      * Removes order from orderbook and returns reserved funds/assets.
      */
-    public String cancelOrder(UUID userId, OrderType orderType) {
+    public String cancelOrder(Long userId, OrderType orderType) {
         Order cancelledOrder = stockDataService.removeOrderByUser(BTC, userId, orderType);
 
         if (cancelledOrder == null) {
@@ -146,7 +162,7 @@ public class StockService {
             log.info("Cancelled SELL order for user {}: returned {} BTC", userId, reservedBtc);
         }
 
-        return String.format("Order cancelled successfully. Order ID: %d, Type: %s, Quantity: %d, Price: %.2f",
+        return String.format("Order cancelled successfully. Order ID: %s, Type: %s, Quantity: %d, Price: %.2f",
                 cancelledOrder.getId(), cancelledOrder.getType(), cancelledOrder.getQuantity(), cancelledOrder.getPrice());
     }
 

@@ -8,7 +8,6 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Service to create users in the exchange via API.
@@ -26,9 +25,9 @@ public class UserService {
     }
 
     /**
-     * Register a new user in the exchange and return the generated UUID.
+     * Register a new user in the exchange and return the generated ID.
      */
-    public UUID registerUser(String name, BigDecimal initialBalance) {
+    public Long registerUser(String name, BigDecimal initialBalance) {
         try {
             String baseUrl = config.getExchange().getApiUrl();
             String registerUrl = baseUrl + "/account/register";
@@ -39,8 +38,13 @@ public class UserService {
             Map<String, Object> response = restTemplate.postForObject(registerUrl, request, Map.class);
             
             if (response != null && response.containsKey("userId")) {
-                String userIdStr = response.get("userId").toString();
-                UUID userId = UUID.fromString(userIdStr);
+                Object userIdObj = response.get("userId");
+                Long userId;
+                if (userIdObj instanceof Number) {
+                    userId = ((Number) userIdObj).longValue();
+                } else {
+                    userId = Long.parseLong(userIdObj.toString());
+                }
                 log.info("Registered user '{}' in exchange with ID: {}", name, userId);
                 return userId;
             }
@@ -56,7 +60,7 @@ public class UserService {
     /**
      * Check if user exists in exchange.
      */
-    public boolean userExists(UUID userId) {
+    public boolean userExists(Long userId) {
         try {
             String baseUrl = config.getExchange().getApiUrl();
             String checkUrl = baseUrl + "/account/" + userId + "/exists";

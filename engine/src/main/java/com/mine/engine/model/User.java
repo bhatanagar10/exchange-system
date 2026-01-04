@@ -5,7 +5,6 @@ import lombok.Setter;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * User model - In-memory cache model for trading operations
@@ -15,7 +14,7 @@ import java.util.UUID;
 @Setter
 public class User implements java.io.Serializable {
     private static final long serialVersionUID = 1L;
-    private UUID id;
+    private Long id;
     private double cash;
     private Map<Market, Long> markets;
     
@@ -28,7 +27,7 @@ public class User implements java.io.Serializable {
         }
     }
     
-    public User(UUID id, double cash, Map<Market, Long> markets) {
+    public User(Long id, double cash, Map<Market, Long> markets) {
         this.id = id;
         this.cash = cash;
         this.markets = markets != null ? new HashMap<>(markets) : new HashMap<>();

@@ -6,7 +6,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.io.Serializable;
-import java.util.UUID;
 
 @Getter
 @Setter
@@ -14,8 +13,8 @@ import java.util.UUID;
 @NoArgsConstructor
 public class Order implements Serializable {
     private static final long serialVersionUID = 1L;
-    private long id;
-    private UUID userId;
+    private String id; // Format: ORD-{userId}-{timestamp}
+    private Long userId;
     private OrderType type;
     private OrderExecutionType executionType;
     private double price;
@@ -23,7 +22,7 @@ public class Order implements Serializable {
     private long originalQuantity;
     private Market market;
 
-    public Order(long id, UUID userId, OrderType type, OrderExecutionType executionType,
+    public Order(String id, Long userId, OrderType type, OrderExecutionType executionType,
                  double price, long quantity, Market market) {
         this.id = id;
         this.userId = userId;

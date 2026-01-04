@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * REST Controller for Account/User APIs.
@@ -21,10 +20,10 @@ import java.util.UUID;
 @CrossOrigin(origins = "*")
 public class AccountController {
 
-    private final Map<UUID, User> userData;
+    private final Map<Long, User> userData;
     private final UserService  userService;
 
-    public AccountController(Map<UUID, User> userData, UserService userService) {
+    public AccountController(Map<Long, User> userData, UserService userService) {
         this.userData = userData;
         this.userService = userService;
     }
@@ -34,7 +33,7 @@ public class AccountController {
      * GET /api/account/{userId}/balance
      */
     @GetMapping("/{userId}/balance")
-    public ResponseEntity<BalanceResponse> getBalance(@PathVariable UUID userId) {
+    public ResponseEntity<BalanceResponse> getBalance(@PathVariable Long userId) {
         User user = userData.get(userId);
         
         if (user == null) {
@@ -58,8 +57,8 @@ public class AccountController {
      */
     @PostMapping("/register")
     public ResponseEntity<BalanceResponse> registerUser(@RequestBody RegisterUserRequest request) {
-        // Ignore userId if sent - generate new UUID from database
-        UUID userID = userService.addUser(request.getInitialBalance());
+        // Ignore userId if sent - generate new ID from database
+        Long userID = userService.addUser(request.getInitialBalance());
         log.info("User {} registered successfully with initial balance {}", userID, request.getInitialBalance());
         
         BalanceResponse response = new BalanceResponse();
@@ -74,7 +73,7 @@ public class AccountController {
      * GET /api/account/{userId}/exists
      */
     @GetMapping("/{userId}/exists")
-    public ResponseEntity<Map<String, Boolean>> checkUserExists(@PathVariable UUID userId) {
+    public ResponseEntity<Map<String, Boolean>> checkUserExists(@PathVariable Long userId) {
         Map<String, Boolean> response = new HashMap<>();
         response.put("exists", userData.containsKey(userId));
         return ResponseEntity.ok(response);
@@ -98,7 +97,7 @@ public class AccountController {
      */
     @PostMapping("/{userId}/deposit")
     public ResponseEntity<BalanceResponse> deposit(
-            @PathVariable UUID userId,
+            @PathVariable Long userId,
             @RequestBody DepositRequest request) {
         
         User user = userData.get(userId);
@@ -123,7 +122,7 @@ public class AccountController {
      */
     @PostMapping("/{userId}/add-btc")
     public ResponseEntity<BalanceResponse> addBtc(
-            @PathVariable UUID userId,
+            @PathVariable Long userId,
             @RequestBody AddBtcRequest request) {
         
         User user = userData.get(userId);
@@ -150,7 +149,7 @@ public class AccountController {
 
     @lombok.Data
     public static class BalanceResponse {
-        private UUID userId;
+        private Long userId;
         private double cashBalance;
         private Map<Market, Long> holdings;
     }

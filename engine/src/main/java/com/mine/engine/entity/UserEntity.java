@@ -6,7 +6,6 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * UserEntity - JPA entity for database persistence
@@ -19,9 +18,9 @@ import java.util.UUID;
 public class UserEntity {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false, unique = true)
-    private UUID id;
+    private Long id;
     
     @Column(name = "cash", nullable = false)
     private double cash;

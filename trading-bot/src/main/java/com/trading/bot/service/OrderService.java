@@ -33,6 +33,7 @@ public class OrderService {
                     .quantity(amount.longValue())
                     .orderExecutionType(com.trading.bot.model.OrderExecutionType.LIMIT)
                     .orderType(isBuy ? OrderMessage.OrderType.BUY : OrderMessage.OrderType.SELL)
+                    .timestamp(System.currentTimeMillis()) // Current timestamp when order is placed
                     .build();
 
             kafkaTemplate.send(KafkaConfig.ORDER_EVENTS_TOPIC, orderMessage);

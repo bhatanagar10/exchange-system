@@ -49,7 +49,7 @@ public class Utils {
                 buyOrdersList.sort((o1, o2) -> {
                     int priceCompare = Double.compare(o2.getPrice(), o1.getPrice());
                     if (priceCompare != 0) return priceCompare;
-                    return Long.compare(o1.getId(), o2.getId());
+                    return o1.getId().compareTo(o2.getId()); // String comparison
                 });
 
                 int index = 1;
@@ -72,7 +72,7 @@ public class Utils {
                 log.info("  --- All Sell Orders (sorted by price ASC) ---");
                 // Create a sorted list to print all orders
                 List<Order> sellOrdersList = new ArrayList<>(sellOrders);
-                sellOrdersList.sort(Comparator.comparingDouble(Order::getPrice).thenComparingLong(Order::getId));
+                sellOrdersList.sort(Comparator.comparingDouble(Order::getPrice).thenComparing(Order::getId));
 
                 int index = 1;
                 for (var order : sellOrdersList) {

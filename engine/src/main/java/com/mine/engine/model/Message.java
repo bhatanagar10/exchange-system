@@ -5,16 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
 public class Message {
-    UUID userId;
+    Long userId;
     double price;
     long quantity;
     OrderExecutionType orderExecutionType;
     OrderType orderType;
+    Long timestamp; // Timestamp when order was placed (datetime at which order was placed)
 }
