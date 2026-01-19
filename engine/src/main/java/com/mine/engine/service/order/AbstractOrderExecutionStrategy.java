@@ -4,6 +4,7 @@ import com.mine.engine.model.Market;
 import com.mine.engine.model.Order;
 import com.mine.engine.model.Transaction;
 import com.mine.engine.model.User;
+import com.mine.engine.service.DatabaseSyncEventPublisher;
 import com.mine.engine.service.StockDataService;
 
 import java.util.List;
@@ -20,16 +21,19 @@ public abstract class AbstractOrderExecutionStrategy implements OrderExecutionSt
     protected final Map<Long, User> userData;
     protected final List<Transaction> transactions;
     protected final AtomicLong transactionIdCounter;
+    protected final DatabaseSyncEventPublisher eventPublisher;
     
     protected AbstractOrderExecutionStrategy(
             StockDataService stockDataService,
             Map<Long, User> userData,
             List<Transaction> transactions,
-            AtomicLong transactionIdCounter) {
+            AtomicLong transactionIdCounter,
+            DatabaseSyncEventPublisher eventPublisher) {
         this.stockDataService = stockDataService;
         this.userData = userData;
         this.transactions = transactions;
         this.transactionIdCounter = transactionIdCounter;
+        this.eventPublisher = eventPublisher;
     }
     
     /**
@@ -71,6 +75,20 @@ public abstract class AbstractOrderExecutionStrategy implements OrderExecutionSt
 
         transactions.add(transaction);
         executedTransactions.add(transaction);
+        
+        // Publish transaction event to Kafka for database sync
+        eventPublisher.publishTransactionEvent(transaction);
+        
+        // Publish order update events to Kafka for database sync
+        // Determine status for buy order
+        String buyOrderStatus = buyOrder.getQuantity() == 0 ? "FILLED" : "PARTIALLY_FILLED";
+        eventPublisher.publishOrderEvent(buyOrder, 
+                com.mine.engine.model.dto.OrderEvent.EventType.ORDER_UPDATED, buyOrderStatus);
+        
+        // Determine status for sell order
+        String sellOrderStatus = sellOrder.getQuantity() == 0 ? "FILLED" : "PARTIALLY_FILLED";
+        eventPublisher.publishOrderEvent(sellOrder, 
+                com.mine.engine.model.dto.OrderEvent.EventType.ORDER_UPDATED, sellOrderStatus);
     }
 }
 

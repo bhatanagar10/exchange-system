@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.mine.engine.model.Market.BTC;
@@ -23,8 +24,9 @@ public class MarketOrderExecutionStrategy extends AbstractOrderExecutionStrategy
             StockDataService stockDataService,
             Map<Long, User> userData,
             List<Transaction> transactions,
-            AtomicLong transactionIdCounter) {
-        super(stockDataService, userData, transactions, transactionIdCounter);
+            AtomicLong transactionIdCounter,
+            com.mine.engine.service.DatabaseSyncEventPublisher eventPublisher) {
+        super(stockDataService, userData, transactions, transactionIdCounter, eventPublisher);
     }
     
     @Override

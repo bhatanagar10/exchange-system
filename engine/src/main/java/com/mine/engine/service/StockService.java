@@ -31,6 +31,7 @@ public class StockService {
     private final StockDataService stockDataService;
     private final Map<Long, User> userData; // Injected singleton map
     private final List<Transaction> transactions; // Injected singleton list
+    private final DatabaseSyncEventPublisher eventPublisher;
 
     // Transaction counter (order ID is now generated from userId + timestamp)
     private AtomicLong transactionIdCounter;
@@ -42,7 +43,8 @@ public class StockService {
      * Constructor with dependency injection of singleton data structures
      * All classes that inject stockDataService, userData, and transactions will get the same instances
      */
-    public StockService(StockDataService stockDataService, Map<Long, User> userData, List<Transaction> transactions) {
+    public StockService(StockDataService stockDataService, Map<Long, User> userData, 
+                       List<Transaction> transactions, DatabaseSyncEventPublisher eventPublisher) {
         // Inject the stock data service
         this.stockDataService = stockDataService;
         
@@ -52,15 +54,18 @@ public class StockService {
         // Inject the singleton transactions list
         this.transactions = transactions;
         
+        // Inject event publisher for database sync
+        this.eventPublisher = eventPublisher;
+        
         // Initialize transaction counter (order ID is now generated from userId + timestamp)
         this.transactionIdCounter = new AtomicLong(1);
         
         // Initialize execution strategies
         this.executionStrategies = new EnumMap<>(OrderExecutionType.class);
         this.executionStrategies.put(OrderExecutionType.MARKET, 
-                new MarketOrderExecutionStrategy(stockDataService, userData, transactions, transactionIdCounter));
+                new MarketOrderExecutionStrategy(stockDataService, userData, transactions, transactionIdCounter, eventPublisher));
         this.executionStrategies.put(OrderExecutionType.LIMIT, 
-                new LimitOrderExecutionStrategy(stockDataService, userData, transactions, transactionIdCounter));
+                new LimitOrderExecutionStrategy(stockDataService, userData, transactions, transactionIdCounter, eventPublisher));
         
         log.info("StockService initialized with {} markets. StockDataService, UserData, and Transactions injected (singletons)", 
                 Market.values().length);
@@ -96,6 +101,12 @@ public class StockService {
         }
 
         long executedQuantity = quantity - remainingQuantity;
+        
+        // Publish order event to Kafka for database sync
+        String status = remainingQuantity == 0 ? "FILLED" : (executedQuantity > 0 ? "PARTIALLY_FILLED" : "PENDING");
+        eventPublisher.publishOrderEvent(buyOrder, 
+                com.mine.engine.model.dto.OrderEvent.EventType.ORDER_CREATED, status);
+        
         String message = String.format("Buy order placed. Executed: %d, Remaining: %d",
                 executedQuantity, remainingQuantity);
 
@@ -130,6 +141,11 @@ public class StockService {
         }
 
         long executedQuantity = quantity - remainingQuantity;
+        
+        // Publish order event to Kafka for database sync
+        String status = remainingQuantity == 0 ? "FILLED" : (executedQuantity > 0 ? "PARTIALLY_FILLED" : "PENDING");
+        eventPublisher.publishOrderEvent(sellOrder, 
+                com.mine.engine.model.dto.OrderEvent.EventType.ORDER_CREATED, status);
 
         String message = String.format("Sell order placed. Executed: %d, Remaining: %d",
                 executedQuantity, remainingQuantity);
@@ -161,6 +177,10 @@ public class StockService {
             user.getMarkets().put(BTC, user.getMarkets().get(BTC) + reservedBtc);
             log.info("Cancelled SELL order for user {}: returned {} BTC", userId, reservedBtc);
         }
+        
+        // Publish order cancelled event to Kafka for database sync
+        eventPublisher.publishOrderEvent(cancelledOrder, 
+                com.mine.engine.model.dto.OrderEvent.EventType.ORDER_CANCELLED, "CANCELLED");
 
         return String.format("Order cancelled successfully. Order ID: %s, Type: %s, Quantity: %d, Price: %.2f",
                 cancelledOrder.getId(), cancelledOrder.getType(), cancelledOrder.getQuantity(), cancelledOrder.getPrice());

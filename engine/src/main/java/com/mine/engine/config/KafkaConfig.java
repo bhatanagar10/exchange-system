@@ -24,7 +24,9 @@ import java.util.Map;
 @EnableKafka
 public class KafkaConfig {
 
-    public static final String ORDER_EVENTS_TOPIC = "order-events";
+    public static final String ORDER_EVENTS_TOPIC = "order-events"; // For user order placement
+    public static final String ORDER_DB_SYNC_TOPIC = "order-db-sync"; // For order database synchronization
+    public static final String TRANSACTION_DB_SYNC_TOPIC = "transaction-db-sync"; // For transaction database synchronization
 
     @Value("${spring.kafka.bootstrap-servers:localhost:9072}")
     private String bootstrapServers;
@@ -60,6 +62,16 @@ public class KafkaConfig {
     @Bean
     public NewTopic orderEventsTopic() {
         return new NewTopic(ORDER_EVENTS_TOPIC, topicPartitions, topicReplicationFactor);
+    }
+    
+    @Bean
+    public NewTopic orderDbSyncTopic() {
+        return new NewTopic(ORDER_DB_SYNC_TOPIC, topicPartitions, topicReplicationFactor);
+    }
+    
+    @Bean
+    public NewTopic transactionDbSyncTopic() {
+        return new NewTopic(TRANSACTION_DB_SYNC_TOPIC, topicPartitions, topicReplicationFactor);
     }
 
     // Producer Configuration
