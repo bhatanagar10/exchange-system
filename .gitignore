@@ -1,2 +1,6 @@
 trading-bot/target
 websocket/target
+engine/target
+db-sync/target
+**/.gitattributes
+engine/.gitattributes
