@@ -68,21 +68,7 @@ public class KafkaMessageConsumer implements MessageConsumer {
     @Override
     public void processMessage(Message message) {
         logger.info("Processing message synchronously via Kafka: {}", message);
-
-        switch(message.getOrderType()) {
-            case BUY:
-                logger.info("Processing BUY order for user : {}", message.getUserId());
-                stockService.placeBuyOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
-                        message.getOrderExecutionType(), message.getTimestamp());
-                break;
-            case SELL:
-                logger.info("Processing SELL order for user: {}", message.getUserId());
-                stockService.placeSellOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
-                        message.getOrderExecutionType(), message.getTimestamp());
-                break;
-            default:
-                logger.warn("Unknown order type: {}", message.getOrderType());
-        }
+        stockService.processOrder(message);
         utils.printStockData();
     }
     

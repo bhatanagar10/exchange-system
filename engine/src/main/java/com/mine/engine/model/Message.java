@@ -16,4 +16,5 @@ public class Message {
     OrderExecutionType orderExecutionType;
     OrderType orderType;
     Long timestamp; // Timestamp when order was placed (datetime at which order was placed)
+    String idempotencyKey; // Idempotency key to prevent duplicate order processing
 }

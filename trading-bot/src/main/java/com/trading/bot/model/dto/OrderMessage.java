@@ -20,6 +20,7 @@ public class OrderMessage {
     private OrderExecutionType orderExecutionType;
     private OrderType orderType;
     private Long timestamp; // Timestamp when order was placed (datetime at which order was placed)
+    private String idempotencyKey; // Idempotency key to prevent duplicate order processing
     
     public enum OrderType {
         BUY, SELL

@@ -92,11 +92,15 @@ public class OrderBookSeeder implements CommandLineRunner {
         log.info("Seeding BUY orders below reference price...");
         
         int makerIndex = 0;
+        int tierIndex = 0;
         for (double tierPercent : TIER_PERCENTAGES) {
             double buyPrice = REFERENCE_PRICE * (1 - tierPercent);
             buyPrice = Math.round(buyPrice * 100.0) / 100.0; // Round to 2 decimals
             
             Long makerId = marketMakerIds[makerIndex % MARKET_MAKER_COUNT];
+            
+            // Generate dummy idempotency key for seeding orders
+            String idempotencyKey = String.format("SEED-BUY-%d-%d-%d", makerId, tierIndex, System.currentTimeMillis());
             
             try {
                 String result = stockService.placeBuyOrder(
@@ -104,7 +108,8 @@ public class OrderBookSeeder implements CommandLineRunner {
                         buyPrice,
                         QUANTITY_PER_ORDER,
                         OrderExecutionType.LIMIT,
-                        System.currentTimeMillis() // Use current timestamp for seeding
+                        System.currentTimeMillis(), // Use current timestamp for seeding
+                        idempotencyKey // Dummy idempotency key for seeding orders
                 );
                 
                 log.info("  BUY order: {} @ ${} ({}% below reference) - {}", 
@@ -115,6 +120,7 @@ public class OrderBookSeeder implements CommandLineRunner {
             }
             
             makerIndex++;
+            tierIndex++;
         }
     }
 
@@ -149,11 +155,15 @@ public class OrderBookSeeder implements CommandLineRunner {
         
         // Now place sell orders above reference price
         int makerIndex = 0;
+        int tierIndex = 0;
         for (double tierPercent : TIER_PERCENTAGES) {
             double sellPrice = REFERENCE_PRICE * (1 + tierPercent);
             sellPrice = Math.round(sellPrice * 100.0) / 100.0; // Round to 2 decimals
             
             Long makerId = marketMakerIds[makerIndex % MARKET_MAKER_COUNT];
+            
+            // Generate dummy idempotency key for seeding orders
+            String idempotencyKey = String.format("SEED-SELL-%d-%d-%d", makerId, tierIndex, System.currentTimeMillis());
             
             try {
                 String result = stockService.placeSellOrder(
@@ -161,7 +171,8 @@ public class OrderBookSeeder implements CommandLineRunner {
                         sellPrice,
                         QUANTITY_PER_ORDER,
                         OrderExecutionType.LIMIT,
-                        System.currentTimeMillis() // Use current timestamp for seeding
+                        System.currentTimeMillis(), // Use current timestamp for seeding
+                        idempotencyKey // Dummy idempotency key for seeding orders
                 );
                 
                 log.info("  SELL order: {} @ ${} ({}% above reference) - {}", 
@@ -172,6 +183,7 @@ public class OrderBookSeeder implements CommandLineRunner {
             }
             
             makerIndex++;
+            tierIndex++;
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.mine.engine.service;
 
 import com.mine.engine.model.Market;
+import com.mine.engine.model.Message;
 import com.mine.engine.model.Order;
 import com.mine.engine.model.OrderBook;
 import com.mine.engine.model.OrderExecutionType;
@@ -32,6 +33,7 @@ public class StockService {
     private final Map<Long, User> userData; // Injected singleton map
     private final List<Transaction> transactions; // Injected singleton list
     private final DatabaseSyncEventPublisher eventPublisher;
+    private final IdempotencyService idempotencyService;
 
     // Transaction counter (order ID is now generated from userId + timestamp)
     private AtomicLong transactionIdCounter;
@@ -44,7 +46,8 @@ public class StockService {
      * All classes that inject stockDataService, userData, and transactions will get the same instances
      */
     public StockService(StockDataService stockDataService, Map<Long, User> userData, 
-                       List<Transaction> transactions, DatabaseSyncEventPublisher eventPublisher) {
+                       List<Transaction> transactions, DatabaseSyncEventPublisher eventPublisher,
+                       IdempotencyService idempotencyService) {
         // Inject the stock data service
         this.stockDataService = stockDataService;
         
@@ -56,6 +59,9 @@ public class StockService {
         
         // Inject event publisher for database sync
         this.eventPublisher = eventPublisher;
+        
+        // Inject idempotency service
+        this.idempotencyService = idempotencyService;
         
         // Initialize transaction counter (order ID is now generated from userId + timestamp)
         this.transactionIdCounter = new AtomicLong(1);
@@ -79,78 +85,156 @@ public class StockService {
     }
 
     // Place a buy order
-    public String placeBuyOrder(Long userId, double price, long quantity, OrderExecutionType orderExecutionType, Long timestamp)  {
+    public String placeBuyOrder(Long userId, double price, long quantity, OrderExecutionType orderExecutionType, Long timestamp, String idempotencyKey)  {
         
-        if (timestamp == null) {
-            throw new IllegalArgumentException("Timestamp is required for order creation");
+        // Check idempotency key before processing
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            // Check if idempotency key is already processed or in progress
+            if (idempotencyService.isKeyProcessed(idempotencyKey)) {
+                log.warn("Order with idempotency key {} is already processed or in progress. Skipping duplicate order.", idempotencyKey);
+                return String.format("Order with idempotency key %s already processed or in progress", idempotencyKey);
+            }
+            
+            // Mark idempotency key as IN_PROGRESS before processing
+            if (!idempotencyService.markAsInProgress(idempotencyKey)) {
+                log.warn("Failed to mark idempotency key {} as IN_PROGRESS. Order may already be processing.", idempotencyKey);
+                return String.format("Order with idempotency key %s is already being processed", idempotencyKey);
+            }
         }
         
-        String orderId = generateOrderId(userId, timestamp);
-        Order buyOrder = new Order(orderId, userId,
-                OrderType.BUY, orderExecutionType, price, quantity, BTC);
+        try {
+            if (timestamp == null) {
+                throw new IllegalArgumentException("Timestamp is required for order creation");
+            }
+            
+            String orderId = generateOrderId(userId, timestamp);
+            Order buyOrder = new Order(orderId, userId,
+                    OrderType.BUY, orderExecutionType, price, quantity, BTC);
 
-        List<Transaction> executedTransactions = new ArrayList<>();
-        long remainingQuantity = quantity;
+            List<Transaction> executedTransactions = new ArrayList<>();
+            long remainingQuantity = quantity;
 
-        // Get the appropriate strategy based on execution type
-        OrderExecutionStrategy strategy = executionStrategies.get(orderExecutionType);
-        if (strategy != null) {
-            remainingQuantity = strategy.executeBuyOrder(buyOrder, remainingQuantity, executedTransactions);
-        } else {
-            log.info("Unknown order execution type: {}", orderExecutionType);
+            // Get the appropriate strategy based on execution type
+            OrderExecutionStrategy strategy = executionStrategies.get(orderExecutionType);
+            if (strategy != null) {
+                remainingQuantity = strategy.executeBuyOrder(buyOrder, remainingQuantity, executedTransactions);
+            } else {
+                log.info("Unknown order execution type: {}", orderExecutionType);
+            }
+
+            long executedQuantity = quantity - remainingQuantity;
+            
+            // Publish order event to Kafka for database sync
+            String status = remainingQuantity == 0 ? "FILLED" : (executedQuantity > 0 ? "PARTIALLY_FILLED" : "PENDING");
+            eventPublisher.publishOrderEvent(buyOrder, 
+                    com.mine.engine.model.dto.OrderEvent.EventType.ORDER_CREATED, status);
+            
+            // Mark idempotency key as done after successful processing
+            if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+                idempotencyService.markAsDone(idempotencyKey);
+            }
+            
+            String message = String.format("Buy order placed. Executed: %d, Remaining: %d",
+                    executedQuantity, remainingQuantity);
+
+            return message;
+        } catch (Exception e) {
+            // On error, leave idempotency key as IN_PROGRESS to prevent duplicate processing
+            // This ensures that if the same request comes again, it will be rejected
+            log.error("Error processing buy order with idempotency key {}: {}", idempotencyKey, e.getMessage(), e);
+            throw e;
         }
-
-        long executedQuantity = quantity - remainingQuantity;
-        
-        // Publish order event to Kafka for database sync
-        String status = remainingQuantity == 0 ? "FILLED" : (executedQuantity > 0 ? "PARTIALLY_FILLED" : "PENDING");
-        eventPublisher.publishOrderEvent(buyOrder, 
-                com.mine.engine.model.dto.OrderEvent.EventType.ORDER_CREATED, status);
-        
-        String message = String.format("Buy order placed. Executed: %d, Remaining: %d",
-                executedQuantity, remainingQuantity);
-
-        return message;
     }
 
     // Place a sell order
-    public String placeSellOrder(Long userId, double price, long quantity, OrderExecutionType orderExecutionType, Long timestamp) {
+    public String placeSellOrder(Long userId, double price, long quantity, OrderExecutionType orderExecutionType, Long timestamp, String idempotencyKey) {
 
-        if (timestamp == null) {
-            throw new IllegalArgumentException("Timestamp is required for order creation");
-        }
-        
-        User user = userData.get(userId);
-
-        // Reserve/deduct stocks for the order
-        user.getMarkets().put(BTC, user.getMarkets().get(BTC) - quantity);
-
-        String orderId = generateOrderId(userId, timestamp);
-        Order sellOrder = new Order(orderId, userId,
-                OrderType.SELL, orderExecutionType, price, quantity, BTC);
-
-        List<Transaction> executedTransactions = new ArrayList<>();
-        long remainingQuantity = quantity;
-
-        // Get the appropriate strategy based on execution type
-        OrderExecutionStrategy strategy = executionStrategies.get(orderExecutionType);
-        if (strategy != null) {
-            remainingQuantity = strategy.executeSellOrder(sellOrder, remainingQuantity, executedTransactions);
-        } else {
-            log.info("Unknown order execution type: {}", orderExecutionType);
+        // Check idempotency key before processing
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            // Check if idempotency key is already processed or in progress
+            if (idempotencyService.isKeyProcessed(idempotencyKey)) {
+                log.warn("Order with idempotency key {} is already processed or in progress. Skipping duplicate order.", idempotencyKey);
+                return String.format("Order with idempotency key %s already processed or in progress", idempotencyKey);
+            }
+            
+            // Mark idempotency key as IN_PROGRESS before processing
+            if (!idempotencyService.markAsInProgress(idempotencyKey)) {
+                log.warn("Failed to mark idempotency key {} as IN_PROGRESS. Order may already be processing.", idempotencyKey);
+                return String.format("Order with idempotency key %s is already being processed", idempotencyKey);
+            }
         }
 
-        long executedQuantity = quantity - remainingQuantity;
+        try {
+            if (timestamp == null) {
+                throw new IllegalArgumentException("Timestamp is required for order creation");
+            }
+            
+            User user = userData.get(userId);
+
+            // Reserve/deduct stocks for the order
+            user.getMarkets().put(BTC, user.getMarkets().get(BTC) - quantity);
+
+            String orderId = generateOrderId(userId, timestamp);
+            Order sellOrder = new Order(orderId, userId,
+                    OrderType.SELL, orderExecutionType, price, quantity, BTC);
+
+            List<Transaction> executedTransactions = new ArrayList<>();
+            long remainingQuantity = quantity;
+
+            // Get the appropriate strategy based on execution type
+            OrderExecutionStrategy strategy = executionStrategies.get(orderExecutionType);
+            if (strategy != null) {
+                remainingQuantity = strategy.executeSellOrder(sellOrder, remainingQuantity, executedTransactions);
+            } else {
+                log.info("Unknown order execution type: {}", orderExecutionType);
+            }
+
+            long executedQuantity = quantity - remainingQuantity;
+            
+            // Publish order event to Kafka for database sync
+            String status = remainingQuantity == 0 ? "FILLED" : (executedQuantity > 0 ? "PARTIALLY_FILLED" : "PENDING");
+            eventPublisher.publishOrderEvent(sellOrder, 
+                    com.mine.engine.model.dto.OrderEvent.EventType.ORDER_CREATED, status);
+            
+            // Mark idempotency key as done after successful processing
+            if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+                idempotencyService.markAsDone(idempotencyKey);
+            }
+            
+            String message = String.format("Sell order placed. Executed: %d, Remaining: %d",
+                    executedQuantity, remainingQuantity);
+
+            return message;
+        } catch (Exception e) {
+            // On error, leave idempotency key as IN_PROGRESS to prevent duplicate processing
+            // This ensures that if the same request comes again, it will be rejected
+            log.error("Error processing sell order with idempotency key {}: {}", idempotencyKey, e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    /**
+     * Process an order (buy or sell) based on the message.
+     * Handles idempotency checks internally.
+     * 
+     * @param message The order message containing all order details
+     * @return Result message indicating order status
+     */
+    public String processOrder(Message message) {
+        if (message == null) {
+            throw new IllegalArgumentException("Message cannot be null");
+        }
         
-        // Publish order event to Kafka for database sync
-        String status = remainingQuantity == 0 ? "FILLED" : (executedQuantity > 0 ? "PARTIALLY_FILLED" : "PENDING");
-        eventPublisher.publishOrderEvent(sellOrder, 
-                com.mine.engine.model.dto.OrderEvent.EventType.ORDER_CREATED, status);
-
-        String message = String.format("Sell order placed. Executed: %d, Remaining: %d",
-                executedQuantity, remainingQuantity);
-
-        return message;
+        switch(message.getOrderType()) {
+            case BUY:
+                return placeBuyOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
+                        message.getOrderExecutionType(), message.getTimestamp(), message.getIdempotencyKey());
+            case SELL:
+                return placeSellOrder(message.getUserId(), message.getPrice(), message.getQuantity(),
+                        message.getOrderExecutionType(), message.getTimestamp(), message.getIdempotencyKey());
+            default:
+                throw new IllegalArgumentException("Unknown order type: " + message.getOrderType());
+        }
     }
 
     /**

@@ -318,14 +318,16 @@ public class SnapshotService {
                         log.debug("Replaying message from partition 0 offset {}: {}", offset, message);
                         
                         // Process message using StockService (same logic as KafkaMessageConsumer)
+                        // For replay, we skip idempotency check since these are historical messages
+                        String idempotencyKey = message.getIdempotencyKey();
                         switch(message.getOrderType()) {
                             case BUY:
                                 stockService.placeBuyOrder(message.getUserId(), message.getPrice(), 
-                                        message.getQuantity(), message.getOrderExecutionType(), message.getTimestamp());
+                                        message.getQuantity(), message.getOrderExecutionType(), message.getTimestamp(), idempotencyKey);
                                 break;
                             case SELL:
                                 stockService.placeSellOrder(message.getUserId(), message.getPrice(), 
-                                        message.getQuantity(), message.getOrderExecutionType(), message.getTimestamp());
+                                        message.getQuantity(), message.getOrderExecutionType(), message.getTimestamp(), idempotencyKey);
                                 break;
                             default:
                                 log.warn("Unknown order type in replayed message: {}", message.getOrderType());

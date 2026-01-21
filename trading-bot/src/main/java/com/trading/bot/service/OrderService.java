@@ -8,6 +8,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Simplified Order Service - Places orders via Kafka.
@@ -27,16 +28,28 @@ public class OrderService {
      */
     public boolean placeOrder(Bot bot, boolean isBuy, BigDecimal amount, BigDecimal price) {
         try {
+            long timestamp = System.currentTimeMillis();
+            
+            // Generate unique idempotency key: BOT-{botId}-{orderType}-{timestamp}-{uuid}
+            String idempotencyKey = String.format("BOT-%d-%s-%d-%s", 
+                    bot.getUserId(),
+                    isBuy ? "BUY" : "SELL",
+                    timestamp,
+                    UUID.randomUUID().toString().substring(0, 8));
+            
             OrderMessage orderMessage = OrderMessage.builder()
                     .userId(bot.getUserId())
                     .price(price.doubleValue())
                     .quantity(amount.longValue())
                     .orderExecutionType(com.trading.bot.model.OrderExecutionType.LIMIT)
                     .orderType(isBuy ? OrderMessage.OrderType.BUY : OrderMessage.OrderType.SELL)
-                    .timestamp(System.currentTimeMillis()) // Current timestamp when order is placed
+                    .timestamp(timestamp) // Current timestamp when order is placed
+                    .idempotencyKey(idempotencyKey) // Unique idempotency key for this order
                     .build();
 
             kafkaTemplate.send(KafkaConfig.ORDER_EVENTS_TOPIC, orderMessage);
+            
+            log.debug("Placed order with idempotency key: {}", idempotencyKey);
 
             return true;
             
