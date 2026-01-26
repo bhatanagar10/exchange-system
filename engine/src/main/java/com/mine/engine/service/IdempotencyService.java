@@ -2,25 +2,32 @@ package com.mine.engine.service;
 
 import com.mine.engine.model.IdempotencyStatus;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
 /**
- * Service to manage idempotency keys and their processing status
+ * Service to manage idempotency keys and their processing status using Redis
  * Prevents duplicate order processing for the same idempotency key
+ * Persists across server restarts to prevent duplicate processing
  */
 @Slf4j
 @Service
 public class IdempotencyService {
 
-    // Thread-safe map to store idempotency keys and their statuses
-    private final Map<String, IdempotencyStatus> idempotencyMap;
+    private static final String REDIS_KEY_PREFIX = "idempotency:";
+    private static final Duration KEY_EXPIRATION = Duration.ofDays(7); // Expire keys after 7 days
+    
+    private final RedisTemplate<String, String> redisTemplate;
 
-    public IdempotencyService() {
-        this.idempotencyMap = new ConcurrentHashMap<>();
-        log.info("IdempotencyService initialized");
+    public IdempotencyService(RedisTemplate<String, String> redisTemplate) {
+        this.redisTemplate = redisTemplate;
+        log.info("IdempotencyService initialized with Redis");
+    }
+    
+    private String getRedisKey(String idempotencyKey) {
+        return REDIS_KEY_PREFIX + idempotencyKey;
     }
 
     /**
@@ -34,13 +41,24 @@ public class IdempotencyService {
             return false; // No idempotency key provided, allow processing
         }
         
-        IdempotencyStatus status = idempotencyMap.get(idempotencyKey);
-        return status == IdempotencyStatus.IN_PROGRESS || status == IdempotencyStatus.DONE;
+        String statusStr = redisTemplate.opsForValue().get(getRedisKey(idempotencyKey));
+        if (statusStr == null) {
+            return false;
+        }
+        
+        try {
+            IdempotencyStatus status = IdempotencyStatus.valueOf(statusStr);
+            return status == IdempotencyStatus.IN_PROGRESS || status == IdempotencyStatus.DONE;
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid idempotency status in Redis for key {}: {}", idempotencyKey, statusStr);
+            return false;
+        }
     }
 
     /**
      * Mark an idempotency key as IN_PROGRESS
      * This should be called before processing an order
+     * Uses Redis SETNX for atomic operation
      * 
      * @param idempotencyKey The idempotency key to mark as in progress
      * @return true if successfully marked as IN_PROGRESS (key was not already processed), false otherwise
@@ -50,17 +68,25 @@ public class IdempotencyService {
             return true; // No idempotency key, allow processing
         }
         
-        // Use putIfAbsent to atomically check and set
-        IdempotencyStatus existingStatus = idempotencyMap.putIfAbsent(idempotencyKey, IdempotencyStatus.IN_PROGRESS);
+        String redisKey = getRedisKey(idempotencyKey);
         
-        if (existingStatus != null) {
+        // Use setIfAbsent (SETNX) for atomic check-and-set operation
+        Boolean setIfAbsent = redisTemplate.opsForValue().setIfAbsent(
+                redisKey, 
+                IdempotencyStatus.IN_PROGRESS.name(),
+                KEY_EXPIRATION
+        );
+        
+        if (Boolean.TRUE.equals(setIfAbsent)) {
+            // Successfully set the key
+            log.debug("Marked idempotency key {} as IN_PROGRESS in Redis", idempotencyKey);
+            return true;
+        } else {
             // Key already exists
-            log.warn("Idempotency key {} already exists with status: {}", idempotencyKey, existingStatus);
+            String existingStatus = redisTemplate.opsForValue().get(redisKey);
+            log.warn("Idempotency key {} already exists in Redis with status: {}", idempotencyKey, existingStatus);
             return false;
         }
-        
-        log.debug("Marked idempotency key {} as IN_PROGRESS", idempotencyKey);
-        return true;
     }
 
     /**
@@ -74,8 +100,9 @@ public class IdempotencyService {
             return; // No idempotency key, nothing to mark
         }
         
-        idempotencyMap.put(idempotencyKey, IdempotencyStatus.DONE);
-        log.debug("Marked idempotency key {} as DONE", idempotencyKey);
+        String redisKey = getRedisKey(idempotencyKey);
+        redisTemplate.opsForValue().set(redisKey, IdempotencyStatus.DONE.name(), KEY_EXPIRATION);
+        log.debug("Marked idempotency key {} as DONE in Redis", idempotencyKey);
     }
 
     /**
@@ -88,18 +115,29 @@ public class IdempotencyService {
         if (idempotencyKey == null || idempotencyKey.isEmpty()) {
             return null;
         }
-        return idempotencyMap.get(idempotencyKey);
+        
+        String statusStr = redisTemplate.opsForValue().get(getRedisKey(idempotencyKey));
+        if (statusStr == null) {
+            return null;
+        }
+        
+        try {
+            return IdempotencyStatus.valueOf(statusStr);
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid idempotency status in Redis for key {}: {}", idempotencyKey, statusStr);
+            return null;
+        }
     }
 
     /**
-     * Remove an idempotency key from the map (for cleanup purposes)
+     * Remove an idempotency key from Redis (for cleanup purposes)
      * 
      * @param idempotencyKey The idempotency key to remove
      */
     public void removeKey(String idempotencyKey) {
         if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
-            idempotencyMap.remove(idempotencyKey);
-            log.debug("Removed idempotency key {}", idempotencyKey);
+            redisTemplate.delete(getRedisKey(idempotencyKey));
+            log.debug("Removed idempotency key {} from Redis", idempotencyKey);
         }
     }
 }
