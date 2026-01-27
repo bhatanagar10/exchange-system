@@ -52,7 +52,7 @@ public class BalanceService {
     private void replenishCash(Bot bot) {
         try {
             String baseUrl = config.getExchange().getApiUrl();
-            String depositUrl = baseUrl + "/account/" + bot.getUserId() + "/deposit";
+            String depositUrl = baseUrl + "/users/" + bot.getUserId() + "/balance";
             
             Map<String, Object> request = new HashMap<>();
             request.put("amount", REPLENISH_AMOUNT.doubleValue());
@@ -76,13 +76,11 @@ public class BalanceService {
 
     private void replenishBtc(Bot bot) {
         try {
+            // Note: BTC replenishment endpoint not yet implemented in main service
+            // For now, we'll skip this or add it later
             String baseUrl = config.getExchange().getApiUrl();
-            String addBtcUrl = baseUrl + "/account/" + bot.getUserId() + "/add-btc";
-            
-            Map<String, Object> request = new HashMap<>();
-            request.put("amount", REPLENISH_BTC.longValue());
-            
-            restTemplate.postForObject(addBtcUrl, request, Map.class);
+            // TODO: Add BTC replenishment endpoint to main service if needed
+            log.warn("BTC replenishment not yet implemented in main service for bot {}", bot.getName());
             
             bot.setAssetBalance(bot.getAssetBalance() != null ? 
                     bot.getAssetBalance().add(REPLENISH_BTC) : REPLENISH_BTC);

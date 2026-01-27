@@ -1,57 +1,55 @@
 package com.trading.bot.service;
 
-import com.trading.bot.config.KafkaConfig;
+import com.trading.bot.config.TradingBotConfig;
 import com.trading.bot.model.Bot;
-import com.trading.bot.model.dto.OrderMessage;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
-import java.util.UUID;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Simplified Order Service - Places orders via Kafka.
+ * Order Service - Places orders via main service REST API.
  */
 @Slf4j
 @Service
 public class OrderService {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RestTemplate restTemplate;
+    private final TradingBotConfig config;
 
-    public OrderService(KafkaTemplate<String, Object> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+    public OrderService(RestTemplate restTemplate, TradingBotConfig config) {
+        this.restTemplate = restTemplate;
+        this.config = config;
     }
 
     /**
-     * Place an order for a bot.
+     * Place an order for a bot via main service.
      */
     public boolean placeOrder(Bot bot, boolean isBuy, BigDecimal amount, BigDecimal price) {
         try {
-            long timestamp = System.currentTimeMillis();
+            String baseUrl = config.getExchange().getApiUrl();
+            String endpoint = isBuy ? "/orders/buy" : "/orders/sell";
+            String url = baseUrl + endpoint;
             
-            // Generate unique idempotency key: BOT-{botId}-{orderType}-{timestamp}-{uuid}
-            String idempotencyKey = String.format("BOT-%d-%s-%d-%s", 
-                    bot.getUserId(),
-                    isBuy ? "BUY" : "SELL",
-                    timestamp,
-                    UUID.randomUUID().toString().substring(0, 8));
+            Map<String, Object> request = new HashMap<>();
+            request.put("userId", bot.getUserId());
+            request.put("price", price.doubleValue());
+            request.put("quantity", amount.longValue());
+            request.put("orderExecutionType", "LIMIT");
             
-            OrderMessage orderMessage = OrderMessage.builder()
-                    .userId(bot.getUserId())
-                    .price(price.doubleValue())
-                    .quantity(amount.longValue())
-                    .orderExecutionType(com.trading.bot.model.OrderExecutionType.LIMIT)
-                    .orderType(isBuy ? OrderMessage.OrderType.BUY : OrderMessage.OrderType.SELL)
-                    .timestamp(timestamp) // Current timestamp when order is placed
-                    .idempotencyKey(idempotencyKey) // Unique idempotency key for this order
-                    .build();
-
-            kafkaTemplate.send(KafkaConfig.ORDER_EVENTS_TOPIC, orderMessage);
+            Map response = restTemplate.postForObject(url, request, Map.class);
             
-            log.debug("Placed order with idempotency key: {}", idempotencyKey);
-
-            return true;
+            if (response != null && Boolean.TRUE.equals(response.get("success"))) {
+                log.debug("Order placed successfully for bot {}: {}", bot.getName(), response.get("message"));
+                return true;
+            } else {
+                log.warn("Order placement failed for bot {}: {}", bot.getName(), 
+                        response != null ? response.get("message") : "Unknown error");
+                return false;
+            }
             
         } catch (Exception e) {
             log.error("Failed to place order for bot {}: {}", bot.getName(), e.getMessage());

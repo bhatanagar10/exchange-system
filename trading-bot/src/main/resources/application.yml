@@ -35,7 +35,7 @@ management:
 # Trading Bot Configuration
 trading-bot:
   exchange:
-    api-url: http://localhost:8080/api
+    api-url: http://localhost:8084/api
     timeout: 5000
     max-retries: 3
     retry-delay-ms: 1000

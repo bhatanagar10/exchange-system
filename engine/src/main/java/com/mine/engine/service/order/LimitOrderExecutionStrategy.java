@@ -2,14 +2,12 @@ package com.mine.engine.service.order;
 
 import com.mine.engine.model.Order;
 import com.mine.engine.model.Transaction;
-import com.mine.engine.model.User;
 import com.mine.engine.service.StockDataService;
+import com.mine.engine.service.UserRedisService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.mine.engine.model.Market.BTC;
@@ -23,11 +21,11 @@ public class LimitOrderExecutionStrategy extends AbstractOrderExecutionStrategy 
     
     public LimitOrderExecutionStrategy(
             StockDataService stockDataService,
-            Map<Long, User> userData,
+            UserRedisService userRedisService,
             List<Transaction> transactions,
             AtomicLong transactionIdCounter,
             com.mine.engine.service.DatabaseSyncEventPublisher eventPublisher) {
-        super(stockDataService, userData, transactions, transactionIdCounter, eventPublisher);
+        super(stockDataService, userRedisService, transactions, transactionIdCounter, eventPublisher);
     }
     
     @Override

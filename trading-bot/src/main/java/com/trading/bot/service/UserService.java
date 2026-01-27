@@ -30,7 +30,7 @@ public class UserService {
     public Long registerUser(String name, BigDecimal initialBalance) {
         try {
             String baseUrl = config.getExchange().getApiUrl();
-            String registerUrl = baseUrl + "/account/register";
+            String registerUrl = baseUrl + "/users";
             
             Map<String, Object> request = new HashMap<>();
             request.put("initialBalance", initialBalance.doubleValue());
@@ -63,10 +63,13 @@ public class UserService {
     public boolean userExists(Long userId) {
         try {
             String baseUrl = config.getExchange().getApiUrl();
-            String checkUrl = baseUrl + "/account/" + userId + "/exists";
+            String checkUrl = baseUrl + "/users/" + userId + "/exists";
             
-            Boolean exists = restTemplate.getForObject(checkUrl, Boolean.class);
-            return exists != null && exists;
+            Map<String, Object> response = restTemplate.getForObject(checkUrl, Map.class);
+            if (response != null && response.containsKey("exists")) {
+                return Boolean.TRUE.equals(response.get("exists"));
+            }
+            return false;
             
         } catch (Exception e) {
             log.warn("Failed to check if user {} exists: {}", userId, e.getMessage());

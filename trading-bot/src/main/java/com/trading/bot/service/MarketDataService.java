@@ -36,10 +36,18 @@ public class MarketDataService {
             
             Map<String, Object> response = restTemplate.getForObject(priceUrl, Map.class);
             
-            if (response != null && response.containsKey("price")) {
+            if (response != null) {
+                // Try to get price (mapped from currentPrice by main service)
                 Object priceObj = response.get("price");
+                if (priceObj == null) {
+                    // Fallback to currentPrice if price is not available
+                    priceObj = response.get("currentPrice");
+                }
+                
                 if (priceObj instanceof Number) {
-                    return BigDecimal.valueOf(((Number) priceObj).doubleValue());
+                    BigDecimal price = BigDecimal.valueOf(((Number) priceObj).doubleValue());
+                    log.debug("Fetched price for {}: {}", tradingPair, price);
+                    return price;
                 }
             }
             

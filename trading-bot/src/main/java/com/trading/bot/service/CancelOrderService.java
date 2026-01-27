@@ -31,9 +31,10 @@ public class CancelOrderService {
     public boolean cancelOrder(Bot bot, boolean isBuyOrder) {
         try {
             String baseUrl = config.getExchange().getApiUrl();
-            String cancelUrl = baseUrl + "/orders/" + bot.getUserId() + "/cancel";
+            String cancelUrl = baseUrl + "/orders/cancel";
             
-            Map<String, String> request = new HashMap<>();
+            Map<String, Object> request = new HashMap<>();
+            request.put("userId", bot.getUserId());
             request.put("orderType", isBuyOrder ? "BUY" : "SELL");
             
             Map<String, Object> response = restTemplate.postForObject(cancelUrl, request, Map.class);

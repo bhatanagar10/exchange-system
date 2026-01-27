@@ -30,7 +30,7 @@ public class StockService {
     private static final String ORDER_ID_PREFIX = "ORD-";
 
     private final StockDataService stockDataService;
-    private final Map<Long, User> userData; // Injected singleton map
+    private final UserRedisService userRedisService; // Redis service for user data
     private final List<Transaction> transactions; // Injected singleton list
     private final DatabaseSyncEventPublisher eventPublisher;
     private final IdempotencyService idempotencyService;
@@ -43,16 +43,16 @@ public class StockService {
     
     /**
      * Constructor with dependency injection of singleton data structures
-     * All classes that inject stockDataService, userData, and transactions will get the same instances
+     * All classes that inject stockDataService, userRedisService, and transactions will get the same instances
      */
-    public StockService(StockDataService stockDataService, Map<Long, User> userData, 
+    public StockService(StockDataService stockDataService, UserRedisService userRedisService, 
                        List<Transaction> transactions, DatabaseSyncEventPublisher eventPublisher,
                        IdempotencyService idempotencyService) {
         // Inject the stock data service
         this.stockDataService = stockDataService;
         
-        // Inject the singleton userData map
-        this.userData = userData;
+        // Inject the user Redis service (reads/writes from Redis)
+        this.userRedisService = userRedisService;
         
         // Inject the singleton transactions list
         this.transactions = transactions;
@@ -69,11 +69,11 @@ public class StockService {
         // Initialize execution strategies
         this.executionStrategies = new EnumMap<>(OrderExecutionType.class);
         this.executionStrategies.put(OrderExecutionType.MARKET, 
-                new MarketOrderExecutionStrategy(stockDataService, userData, transactions, transactionIdCounter, eventPublisher));
+                new MarketOrderExecutionStrategy(stockDataService, userRedisService, transactions, transactionIdCounter, eventPublisher));
         this.executionStrategies.put(OrderExecutionType.LIMIT, 
-                new LimitOrderExecutionStrategy(stockDataService, userData, transactions, transactionIdCounter, eventPublisher));
+                new LimitOrderExecutionStrategy(stockDataService, userRedisService, transactions, transactionIdCounter, eventPublisher));
         
-        log.info("StockService initialized with {} markets. StockDataService, UserData, and Transactions injected (singletons)", 
+        log.info("StockService initialized with {} markets. StockDataService, UserRedisService, and Transactions injected", 
                 Market.values().length);
     }
 
@@ -169,10 +169,14 @@ public class StockService {
                 throw new IllegalArgumentException("Timestamp is required for order creation");
             }
             
-            User user = userData.get(userId);
+            User user = userRedisService.getUser(userId);
+            if (user == null) {
+                throw new IllegalArgumentException("User not found: " + userId);
+            }
 
             // Reserve/deduct stocks for the order
             user.getMarkets().put(BTC, user.getMarkets().get(BTC) - quantity);
+            userRedisService.updateUser(user); // Update in Redis
 
             String orderId = generateOrderId(userId, timestamp);
             Order sellOrder = new Order(orderId, userId,
@@ -249,7 +253,10 @@ public class StockService {
         }
 
         // Return reserved funds/assets
-        User user = userData.get(userId);
+        User user = userRedisService.getUser(userId);
+        if (user == null) {
+            return "User not found";
+        }
         if (orderType == OrderType.BUY) {
             // Buy orders don't reserve cash upfront - cash is only deducted on execution
             // So nothing to return for buy orders
@@ -259,6 +266,7 @@ public class StockService {
             // Return BTC that was reserved for sell order
             long reservedBtc = cancelledOrder.getQuantity();
             user.getMarkets().put(BTC, user.getMarkets().get(BTC) + reservedBtc);
+            userRedisService.updateUser(user); // Update in Redis
             log.info("Cancelled SELL order for user {}: returned {} BTC", userId, reservedBtc);
         }
         

@@ -6,9 +6,9 @@ import com.mine.engine.model.Transaction;
 import com.mine.engine.model.User;
 import com.mine.engine.service.DatabaseSyncEventPublisher;
 import com.mine.engine.service.StockDataService;
+import com.mine.engine.service.UserRedisService;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -18,19 +18,19 @@ import java.util.concurrent.atomic.AtomicLong;
 public abstract class AbstractOrderExecutionStrategy implements OrderExecutionStrategy {
     
     protected final StockDataService stockDataService;
-    protected final Map<Long, User> userData;
+    protected final UserRedisService userRedisService;
     protected final List<Transaction> transactions;
     protected final AtomicLong transactionIdCounter;
     protected final DatabaseSyncEventPublisher eventPublisher;
     
     protected AbstractOrderExecutionStrategy(
             StockDataService stockDataService,
-            Map<Long, User> userData,
+            UserRedisService userRedisService,
             List<Transaction> transactions,
             AtomicLong transactionIdCounter,
             DatabaseSyncEventPublisher eventPublisher) {
         this.stockDataService = stockDataService;
-        this.userData = userData;
+        this.userRedisService = userRedisService;
         this.transactions = transactions;
         this.transactionIdCounter = transactionIdCounter;
         this.eventPublisher = eventPublisher;
@@ -47,8 +47,12 @@ public abstract class AbstractOrderExecutionStrategy implements OrderExecutionSt
         sellOrder.setQuantity(sellOrder.getQuantity() - executionQuantity);
 
         // Update user balances
-        User buyer = userData.get(buyOrder.getUserId());
-        User seller = userData.get(sellOrder.getUserId());
+        User buyer = userRedisService.getUser(buyOrder.getUserId());
+        User seller = userRedisService.getUser(sellOrder.getUserId());
+        
+        if (buyer == null || seller == null) {
+            throw new IllegalStateException("Buyer or seller not found in Redis");
+        }
 
         // Transfer stocks and cash
         // Add stocks to buyer
@@ -61,6 +65,10 @@ public abstract class AbstractOrderExecutionStrategy implements OrderExecutionSt
         
         // Deduct stocks from seller (already reserved)
         seller.getMarkets().put(market, seller.getMarkets().getOrDefault(market, 0L) - executionQuantity);
+        
+        // Update both users in Redis
+        userRedisService.updateUser(buyer);
+        userRedisService.updateUser(seller);
 
         // Create and record transaction
         Transaction transaction = new Transaction(

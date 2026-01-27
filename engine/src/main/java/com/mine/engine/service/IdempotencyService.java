@@ -2,6 +2,7 @@ package com.mine.engine.service;
 
 import com.mine.engine.model.IdempotencyStatus;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +22,8 @@ public class IdempotencyService {
     
     private final RedisTemplate<String, String> redisTemplate;
 
-    public IdempotencyService(RedisTemplate<String, String> redisTemplate) {
+    public IdempotencyService(@Qualifier("idempotencyRedisTemplate")
+                             RedisTemplate<String, String> redisTemplate) {
         this.redisTemplate = redisTemplate;
         log.info("IdempotencyService initialized with Redis");
     }

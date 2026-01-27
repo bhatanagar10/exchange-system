@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: main
+  
+  # Redis Configuration for User Data
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+  
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9072
+    producer:
+      acks: all
+      retries: 3
+      enable-idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Server Configuration
+server:
+  port: 8084
+
+# Engine Service Configuration (only main service can contact engine)
+engine:
+  api:
+    url: http://localhost:8080/api
+    timeout: 5000
+
+# Kafka Topics
+kafka:
+  topics:
+    order-events: order-events
+
+# Logging Configuration
+logging:
+  level:
+    com.mine.main: INFO
+    org.springframework.kafka: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
