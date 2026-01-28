@@ -36,6 +36,7 @@ management:
 trading-bot:
   exchange:
     api-url: http://localhost:8084/api
+    websocket-url: http://localhost:8081/ws
     timeout: 5000
     max-retries: 3
     retry-delay-ms: 1000

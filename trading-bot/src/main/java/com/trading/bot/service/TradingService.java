@@ -33,6 +33,7 @@ public class TradingService {
     private final TradingHelperService tradingHelperService;
     private final PerformanceMetricsService performanceMetricsService;
     private final OrderTrackingService orderTrackingService;
+    private final WebSocketMarketDataService webSocketMarketDataService;
     private final TradingBotConfig config;
     private final Random random = new Random();
 
@@ -49,6 +50,7 @@ public class TradingService {
                          TradingHelperService tradingHelperService,
                          PerformanceMetricsService performanceMetricsService,
                          OrderTrackingService orderTrackingService,
+                         WebSocketMarketDataService webSocketMarketDataService,
                          TradingBotConfig config) {
         this.botStorage = botStorage;
         this.marketDataService = marketDataService;
@@ -63,6 +65,7 @@ public class TradingService {
         this.tradingHelperService = tradingHelperService;
         this.performanceMetricsService = performanceMetricsService;
         this.orderTrackingService = orderTrackingService;
+        this.webSocketMarketDataService = webSocketMarketDataService;
         this.config = config;
     }
 
@@ -80,8 +83,12 @@ public class TradingService {
         }
 
         // Get order book once for all bots
+        // Try WebSocket cache first, then fall back to HTTP API
         String tradingPair = activeBots.get(0).getTradingPair();
         OrderBookService.OrderBookData orderBook = orderBookService.getOrderBook(tradingPair);
+        
+        // Also get WebSocket market data for enhanced metrics
+        com.trading.bot.dto.MarketDataDTO webSocketMarketData = webSocketMarketDataService.getMarketData();
 
         for (Bot bot : activeBots) {
             try {

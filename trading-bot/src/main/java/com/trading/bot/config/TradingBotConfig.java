@@ -28,6 +28,7 @@ public class TradingBotConfig {
     @Setter
     public static class Exchange {
         private String apiUrl = "http://localhost:8084/api";
+        private String websocketUrl = "http://localhost:8081/ws";
         private int timeout = 5000;
         private int maxRetries = 3;
         private int retryDelayMs = 1000;

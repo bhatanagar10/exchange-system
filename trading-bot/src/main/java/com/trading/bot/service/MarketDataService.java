@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Simplified Market Data Service - Fetches price from exchange API.
+ * Market Data Service - Uses WebSocket data when available, falls back to HTTP API
  */
 @Slf4j
 @Service
@@ -18,18 +18,33 @@ public class MarketDataService {
 
     private final RestTemplate restTemplate;
     private final TradingBotConfig config;
+    private final WebSocketMarketDataService webSocketMarketDataService;
     private final Map<String, BigDecimal> fallbackPrices = new HashMap<>();
 
-    public MarketDataService(RestTemplate restTemplate, TradingBotConfig config) {
+    public MarketDataService(RestTemplate restTemplate, 
+                            TradingBotConfig config,
+                            WebSocketMarketDataService webSocketMarketDataService) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.webSocketMarketDataService = webSocketMarketDataService;
         fallbackPrices.put("BTC/USDT", new BigDecimal("500.00"));
     }
 
     /**
      * Get current price for trading pair.
+     * First tries WebSocket cache, then falls back to HTTP API
      */
     public BigDecimal getCurrentPrice(String tradingPair) {
+        // Try WebSocket cache first
+        if (webSocketMarketDataService.isConnected()) {
+            BigDecimal cachedPrice = webSocketMarketDataService.getCurrentPrice(tradingPair);
+            if (cachedPrice != null) {
+                log.debug("Using WebSocket cached price for {}: {}", tradingPair, cachedPrice);
+                return cachedPrice;
+            }
+        }
+        
+        // Fallback to HTTP API
         try {
             String baseUrl = config.getExchange().getApiUrl();
             String priceUrl = baseUrl + "/market/price/" + tradingPair;
@@ -46,7 +61,7 @@ public class MarketDataService {
                 
                 if (priceObj instanceof Number) {
                     BigDecimal price = BigDecimal.valueOf(((Number) priceObj).doubleValue());
-                    log.debug("Fetched price for {}: {}", tradingPair, price);
+                    log.debug("Fetched price via HTTP API for {}: {}", tradingPair, price);
                     return price;
                 }
             }

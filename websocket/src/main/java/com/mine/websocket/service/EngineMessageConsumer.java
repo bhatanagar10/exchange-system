@@ -1,7 +1,7 @@
 package com.mine.websocket.service;
 
 import com.mine.websocket.config.RabbitMQConfig;
-import com.mine.websocket.dto.OrderBookDTO;
+import com.mine.websocket.dto.MarketDataDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -22,19 +22,19 @@ public class EngineMessageConsumer {
     }
 
     /**
-     * Consumes messages from RabbitMQ queue (subscribed to engine.websocket.exchange)
+     * Consumes comprehensive market data from RabbitMQ queue (subscribed to engine.websocket.exchange)
      * and broadcasts them to all WebSocket subscribers via STOMP
      */
     @RabbitListener(queues = RabbitMQConfig.WEBSOCKET_QUEUE)
-    public void handleEngineMessage(OrderBookDTO orderBookDTO) {
-        log.info("Received order book data from engine via RabbitMQ");
+    public void handleEngineMessage(MarketDataDTO marketData) {
+        log.debug("Received market data from engine via RabbitMQ");
         
         try {
-            // Broadcast order book data directly to all subscribers of /topic/public
+            // Broadcast comprehensive market data to all subscribers of /topic/public
             // The payload will be automatically serialized to JSON by Spring
-            messagingTemplate.convertAndSend("/topic/public", orderBookDTO);
+            messagingTemplate.convertAndSend("/topic/public", marketData);
             
-            log.info("Broadcasted order book data to WebSocket subscribers");
+            log.debug("Broadcasted market data to WebSocket subscribers");
         } catch (Exception e) {
             log.error("Error processing message from engine: {}", e.getMessage(), e);
         }

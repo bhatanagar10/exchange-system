@@ -1,5 +1,6 @@
 package com.trading.bot.service;
 
+import com.trading.bot.dto.MarketDataDTO;
 import com.trading.bot.service.OrderBookService.OrderBookData;
 import com.trading.bot.service.OrderBookService.OrderLevel;
 import lombok.Builder;
@@ -13,10 +14,17 @@ import java.util.List;
 
 /**
  * Service to analyze order book depth and metrics
+ * Can use WebSocket data when available
  */
 @Slf4j
 @Service
 public class OrderBookAnalyzer {
+    
+    private final WebSocketMarketDataService webSocketMarketDataService;
+    
+    public OrderBookAnalyzer(WebSocketMarketDataService webSocketMarketDataService) {
+        this.webSocketMarketDataService = webSocketMarketDataService;
+    }
 
     @Data
     @Builder
@@ -34,6 +42,7 @@ public class OrderBookAnalyzer {
 
     /**
      * Analyze order book and return metrics
+     * Can also analyze directly from WebSocket MarketDataDTO
      */
     public OrderBookMetrics analyze(OrderBookData orderBook) {
         if (orderBook == null || orderBook.getBuyOrders().isEmpty() && orderBook.getSellOrders().isEmpty()) {
@@ -93,6 +102,60 @@ public class OrderBookAnalyzer {
                 .bestAsk(bestAskPrice)
                 .bidOrderCount(orderBook.getBuyOrders().size())
                 .askOrderCount(orderBook.getSellOrders().size())
+                .build();
+    }
+
+    /**
+     * Analyze directly from WebSocket MarketDataDTO (more efficient)
+     */
+    public OrderBookMetrics analyzeFromWebSocket(MarketDataDTO marketData) {
+        if (marketData == null) {
+            return OrderBookMetrics.builder()
+                    .bidDepth(BigDecimal.ZERO)
+                    .askDepth(BigDecimal.ZERO)
+                    .imbalance(0.0)
+                    .spread(BigDecimal.ZERO)
+                    .spreadPercent(BigDecimal.ZERO)
+                    .bestBid(BigDecimal.ZERO)
+                    .bestAsk(BigDecimal.ZERO)
+                    .bidOrderCount(0)
+                    .askOrderCount(0)
+                    .build();
+        }
+
+        BigDecimal bestBidPrice = marketData.getBestBid() != null ? 
+                BigDecimal.valueOf(marketData.getBestBid()) : BigDecimal.ZERO;
+        BigDecimal bestAskPrice = marketData.getBestAsk() != null ? 
+                BigDecimal.valueOf(marketData.getBestAsk()) : BigDecimal.ZERO;
+
+        BigDecimal bidDepth = marketData.getBidDepth() != null ? 
+                BigDecimal.valueOf(marketData.getBidDepth()) : BigDecimal.ZERO;
+        BigDecimal askDepth = marketData.getAskDepth() != null ? 
+                BigDecimal.valueOf(marketData.getAskDepth()) : BigDecimal.ZERO;
+
+        double imbalance = marketData.getImbalance() != null ? marketData.getImbalance() : 0.0;
+
+        BigDecimal spread = BigDecimal.ZERO;
+        BigDecimal spreadPercent = BigDecimal.ZERO;
+        if (bestBidPrice.compareTo(BigDecimal.ZERO) > 0 && bestAskPrice.compareTo(BigDecimal.ZERO) > 0) {
+            spread = bestAskPrice.subtract(bestBidPrice);
+            BigDecimal midPrice = bestBidPrice.add(bestAskPrice).divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+            if (midPrice.compareTo(BigDecimal.ZERO) > 0) {
+                spreadPercent = spread.divide(midPrice, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100));
+            }
+        }
+
+        return OrderBookMetrics.builder()
+                .bidDepth(bidDepth)
+                .askDepth(askDepth)
+                .imbalance(imbalance)
+                .spread(spread)
+                .spreadPercent(spreadPercent)
+                .bestBid(bestBidPrice)
+                .bestAsk(bestAskPrice)
+                .bidOrderCount(marketData.getBuyOrderCount() != null ? marketData.getBuyOrderCount() : 0)
+                .askOrderCount(marketData.getSellOrderCount() != null ? marketData.getSellOrderCount() : 0)
                 .build();
     }
 

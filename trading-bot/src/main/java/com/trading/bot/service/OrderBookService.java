@@ -10,6 +10,7 @@ import java.util.*;
 
 /**
  * Service to fetch order book data from exchange.
+ * Uses WebSocket cache when available, falls back to HTTP API
  */
 @Slf4j
 @Service
@@ -17,17 +18,31 @@ public class OrderBookService {
 
     private final RestTemplate restTemplate;
     private final TradingBotConfig config;
+    private final WebSocketMarketDataService webSocketMarketDataService;
 
-    public OrderBookService(RestTemplate restTemplate, TradingBotConfig config) {
+    public OrderBookService(RestTemplate restTemplate, 
+                           TradingBotConfig config,
+                           WebSocketMarketDataService webSocketMarketDataService) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.webSocketMarketDataService = webSocketMarketDataService;
     }
 
     /**
      * Get order book data from exchange.
-     * Returns map with "bids" (buy orders) and "asks" (sell orders).
+     * First tries WebSocket cache, then falls back to HTTP API
      */
     public OrderBookData getOrderBook(String tradingPair) {
+        // Try WebSocket cache first
+        if (webSocketMarketDataService.isConnected()) {
+            OrderBookData cachedData = webSocketMarketDataService.getOrderBook(tradingPair);
+            if (cachedData != null) {
+                log.debug("Using WebSocket cached order book for {}", tradingPair);
+                return cachedData;
+            }
+        }
+        
+        // Fallback to HTTP API
         try {
             String baseUrl = config.getExchange().getApiUrl();
             // Convert BTC/USDT to BTC for API
@@ -65,6 +80,7 @@ public class OrderBookService {
             // Sort sell orders by price ascending (lowest first)
             sellOrders.sort((a, b) -> a.getPrice().compareTo(b.getPrice()));
             
+            log.debug("Fetched order book via HTTP API for {}", tradingPair);
             return new OrderBookData(buyOrders, sellOrders);
             
         } catch (Exception e) {

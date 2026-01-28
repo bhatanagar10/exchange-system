@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PriceHistoryService {
 
     private final MarketDataService marketDataService;
+    private final WebSocketMarketDataService webSocketMarketDataService;
     private final TradingBotConfig config;
     
     // Price history: tradingPair -> List<PricePoint>
@@ -38,19 +39,34 @@ public class PriceHistoryService {
         BULLISH, BEARISH, SIDEWAYS
     }
 
-    public PriceHistoryService(MarketDataService marketDataService, TradingBotConfig config) {
+    public PriceHistoryService(MarketDataService marketDataService, 
+                              WebSocketMarketDataService webSocketMarketDataService,
+                              TradingBotConfig config) {
         this.marketDataService = marketDataService;
+        this.webSocketMarketDataService = webSocketMarketDataService;
         this.config = config;
     }
 
     /**
      * Update price history periodically
+     * Uses WebSocket data when available for real-time updates
      */
     @Scheduled(fixedRate = 1000)
     public void updatePriceHistory() {
         // Update for all known trading pairs
         priceHistory.keySet().forEach(pair -> {
-            BigDecimal price = marketDataService.getCurrentPrice(pair);
+            BigDecimal price = null;
+            
+            // Try WebSocket cache first
+            if (webSocketMarketDataService.isConnected()) {
+                price = webSocketMarketDataService.getCurrentPrice(pair);
+            }
+            
+            // Fallback to HTTP API if WebSocket not available
+            if (price == null) {
+                price = marketDataService.getCurrentPrice(pair);
+            }
+            
             if (price != null) {
                 addPricePoint(pair, price);
             }
