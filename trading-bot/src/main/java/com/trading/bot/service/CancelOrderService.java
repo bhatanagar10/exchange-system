@@ -19,10 +19,12 @@ public class CancelOrderService {
 
     private final RestTemplate restTemplate;
     private final TradingBotConfig config;
+    private final OrderTrackingService orderTrackingService;
 
-    public CancelOrderService(RestTemplate restTemplate, TradingBotConfig config) {
+    public CancelOrderService(RestTemplate restTemplate, TradingBotConfig config, OrderTrackingService orderTrackingService) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.orderTrackingService = orderTrackingService;
     }
 
     /**
@@ -43,6 +45,9 @@ public class CancelOrderService {
                 // Clear active order flags
                 bot.setHasActiveBuyOrder(false);
                 bot.setHasActiveSellOrder(false);
+                
+                // Clear order tracking
+                orderTrackingService.clearOrder(bot.getId());
                 
                 log.info("Cancelled {} order for bot {}", isBuyOrder ? "BUY" : "SELL", bot.getName());
                 return true;

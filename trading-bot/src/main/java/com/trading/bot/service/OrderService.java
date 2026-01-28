@@ -19,16 +19,19 @@ public class OrderService {
 
     private final RestTemplate restTemplate;
     private final TradingBotConfig config;
+    private final OrderTrackingService orderTrackingService;
 
-    public OrderService(RestTemplate restTemplate, TradingBotConfig config) {
+    public OrderService(RestTemplate restTemplate, TradingBotConfig config, OrderTrackingService orderTrackingService) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.orderTrackingService = orderTrackingService;
     }
 
     /**
      * Place an order for a bot via main service.
+     * Returns order ID if successful, null otherwise.
      */
-    public boolean placeOrder(Bot bot, boolean isBuy, BigDecimal amount, BigDecimal price) {
+    public String placeOrder(Bot bot, boolean isBuy, BigDecimal amount, BigDecimal price) {
         try {
             String baseUrl = config.getExchange().getApiUrl();
             String endpoint = isBuy ? "/orders/buy" : "/orders/sell";
@@ -43,17 +46,21 @@ public class OrderService {
             Map response = restTemplate.postForObject(url, request, Map.class);
             
             if (response != null && Boolean.TRUE.equals(response.get("success"))) {
+                String orderId = (String) response.get("orderId");
+                if (orderId != null) {
+                    orderTrackingService.trackOrder(bot.getId(), orderId, isBuy);
+                }
                 log.debug("Order placed successfully for bot {}: {}", bot.getName(), response.get("message"));
-                return true;
+                return orderId;
             } else {
                 log.warn("Order placement failed for bot {}: {}", bot.getName(), 
                         response != null ? response.get("message") : "Unknown error");
-                return false;
+                return null;
             }
             
         } catch (Exception e) {
             log.error("Failed to place order for bot {}: {}", bot.getName(), e.getMessage());
-            return false;
+            return null;
         }
     }
 }

@@ -32,19 +32,32 @@ public class BotInitializationConfig {
             BigDecimal initialBalance = config.getSimulation().getInitialBotBalance();
             String tradingPair = config.getSimulation().getDefaultTradingPair();
 
-            // Create 10 bots with different strategies distributed across:
-            // 3 Matchers, 3 Aggressive, 2 Conservative, 2 Timeout
+            // Create 18 bots with different strategies distributed across:
+            // 2 Matchers, 2 Aggressive, 2 Conservative, 2 Timeout, 2 Market Maker, 
+            // 1 Trend Following, 1 Mean Reversion, 4 Market Activity, 2 Order Book Balancer
             String[] botNames = {
-                "Bot-Matcher-1", "Bot-Matcher-2", "Bot-Matcher-3",
-                "Bot-Aggressive-1", "Bot-Aggressive-2", "Bot-Aggressive-3",
+                "Bot-Matcher-1", "Bot-Matcher-2",
+                "Bot-Aggressive-1", "Bot-Aggressive-2",
                 "Bot-Conservative-1", "Bot-Conservative-2",
-                "Bot-Timeout-1", "Bot-Timeout-2"
+                "Bot-Timeout-1", "Bot-Timeout-2",
+                "Bot-MarketMaker-1", "Bot-MarketMaker-2",
+                "Bot-TrendFollowing-1",
+                "Bot-MeanReversion-1",
+                "Bot-MarketActivity-1", "Bot-MarketActivity-2", 
+                "Bot-MarketActivity-3", "Bot-MarketActivity-4",
+                "Bot-OrderBookBalancer-1", "Bot-OrderBookBalancer-2"
             };
             String[] strategies = {
-                "MATCHER", "MATCHER", "MATCHER",
-                "AGGRESSIVE", "AGGRESSIVE", "AGGRESSIVE",
+                "MATCHER", "MATCHER",
+                "AGGRESSIVE", "AGGRESSIVE",
                 "CONSERVATIVE", "CONSERVATIVE",
-                "TIMEOUT", "TIMEOUT"
+                "TIMEOUT", "TIMEOUT",
+                "MARKET_MAKER", "MARKET_MAKER",
+                "TREND_FOLLOWING",
+                "MEAN_REVERSION",
+                "MARKET_ACTIVITY", "MARKET_ACTIVITY",
+                "MARKET_ACTIVITY", "MARKET_ACTIVITY",
+                "ORDER_BOOK_BALANCER", "ORDER_BOOK_BALANCER"
             };
 
             for (int i = 0; i < botNames.length; i++) {
