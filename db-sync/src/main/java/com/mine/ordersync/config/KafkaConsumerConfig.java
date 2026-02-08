@@ -2,7 +2,9 @@ package com.mine.ordersync.config;
 
 import com.mine.ordersync.model.OrderEvent;
 import com.mine.ordersync.model.TransactionEvent;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -26,7 +28,19 @@ public class KafkaConsumerConfig {
     
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
-    
+
+    @Value("${spring.kafka.security.protocol:SASL_PLAINTEXT}")
+    private String securityProtocol;
+
+    @Value("${spring.kafka.sasl.mechanism:PLAIN}")
+    private String saslMechanism;
+
+    @Value("${spring.kafka.sasl.username:dbsync}")
+    private String saslUsername;
+
+    @Value("${spring.kafka.sasl.password:dbsync-secret}")
+    private String saslPassword;
+
     /**
      * Common consumer configuration properties
      */
@@ -40,6 +54,13 @@ public class KafkaConsumerConfig {
         configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1); // Process one at a time
         configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "com.mine.ordersync.model");
         configProps.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
+        if ("SASL_PLAINTEXT".equals(securityProtocol)) {
+            configProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+            configProps.put(SaslConfigs.SASL_MECHANISM, saslMechanism);
+            configProps.put(SaslConfigs.SASL_JAAS_CONFIG,
+                    String.format("org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                            saslUsername, saslPassword));
+        }
         return configProps;
     }
     

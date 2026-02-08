@@ -9,7 +9,7 @@ spring:
       port: 6379
       timeout: 2000ms
   
-  # Kafka Configuration
+  # Kafka Configuration (main produces to order-events only)
   kafka:
     bootstrap-servers: localhost:9072
     producer:
@@ -18,6 +18,13 @@ spring:
       enable-idempotence: true
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    # SASL/PLAIN (main can produce to order-events)
+    security:
+      protocol: SASL_PLAINTEXT
+    sasl:
+      mechanism: PLAIN
+      username: main
+      password: main-secret
 
 # Server Configuration
 server:
