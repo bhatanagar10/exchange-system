@@ -1,6 +1,7 @@
 package com.mine.engine.service;
 
 import com.mine.engine.config.KafkaConfig;
+import com.mine.engine.config.S3SnapshotProperties;
 import com.mine.engine.model.Market;
 import com.mine.engine.model.Message;
 import com.mine.engine.model.Order;
@@ -19,10 +20,23 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectInputStream;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
@@ -59,17 +73,22 @@ public class SnapshotService {
     private final String bootstrapServers;
     private final String groupId;
 
+    private final S3SnapshotProperties s3Properties;
+    private final AmazonS3 s3Client; // null when S3 disabled/misconfigured
+
     private static final String SNAPSHOT_FILE = "stockData.snapshot";
-    private static final String SNAPSHOT_DIRECTORY = "C:\\Users\\INNOVATIONM-ADMIN\\Documents\\mine\\exchange\\engine";
 
     public SnapshotService(
             StockDataService stockDataService,
             @Value("${snapshot.enabled:true}") boolean snapshotEnabled,
+            @Value("${snapshot.path:data/snapshots}") String snapshotDirectory,
             @Autowired(required = false) KafkaOffsetTracker offsetTracker,
             @Autowired(required = false) StockService stockService,
             @Autowired(required = false) ConsumerFactory<String, Message> consumerFactory,
             @Value("${spring.kafka.bootstrap-servers:localhost:9072}") String bootstrapServers,
-            @Value("${spring.kafka.consumer.group-id:engine-order-consumer-group}") String groupId) {
+            @Value("${spring.kafka.consumer.group-id:engine-order-consumer-group}") String groupId,
+            S3SnapshotProperties s3Properties
+    ) {
         this.stockDataService = stockDataService;
         this.snapshotEnabled = snapshotEnabled;
         this.offsetTracker = offsetTracker;
@@ -77,17 +96,69 @@ public class SnapshotService {
         this.consumerFactory = consumerFactory;
         this.bootstrapServers = bootstrapServers;
         this.groupId = groupId;
-        this.snapshotPath = Paths.get(SNAPSHOT_DIRECTORY);
+        this.snapshotPath = Paths.get(snapshotDirectory);
+        this.s3Properties = s3Properties;
+
+        // Normalize S3 key - use default if empty
+        if (s3Properties.getKey() == null || s3Properties.getKey().isBlank()) {
+            s3Properties.setKey("engine/" + SNAPSHOT_FILE);
+        } else {
+            s3Properties.setKey(s3Properties.getKey().trim());
+        }
+
+        this.s3Client = buildS3ClientIfEnabled();
 
         // Create snapshot directory if it doesn't exist
         createSnapshotDirectory();
 
-        log.info("SnapshotService initialized - Path: {}, Enabled: {}, KafkaOffsetTracker: {}, StockService: {}, ConsumerFactory: {}",
-                snapshotPath, snapshotEnabled, offsetTracker != null ? "available" : "not available",
+        log.info("SnapshotService initialized - Path: {}, Enabled: {}, S3 enabled: {}, S3 prefer: {}, S3 bucket: {}, S3 key: {}, KafkaOffsetTracker: {}, StockService: {}, ConsumerFactory: {}",
+                snapshotPath, snapshotEnabled, (this.s3Client != null), s3Properties.isPrefer(), 
+                (s3Properties.getBucket() == null || s3Properties.getBucket().isBlank() ? "(not set)" : s3Properties.getBucket()), 
+                s3Properties.getKey(),
+                offsetTracker != null ? "available" : "not available",
                 stockService != null ? "available" : "not available",
                 consumerFactory != null ? "available" : "not available");
     }
 
+    private AmazonS3 buildS3ClientIfEnabled() {
+
+        try {
+            AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
+            
+            // Set credentials
+            String accessKey = s3Properties.getAccessKey();
+            String secretKey = s3Properties.getSecretKey();
+            if (accessKey != null && !accessKey.isBlank() && secretKey != null && !secretKey.isBlank()) {
+                AWSCredentials credentials = new BasicAWSCredentials(accessKey.trim(), secretKey.trim());
+                builder.withCredentials(new AWSStaticCredentialsProvider(credentials));
+            } else {
+                builder.withCredentials(new DefaultAWSCredentialsProviderChain());
+            }
+
+            // Set region or endpoint
+            String regionStr = s3Properties.getRegion() != null && !s3Properties.getRegion().isBlank() 
+                    ? s3Properties.getRegion().trim() : "us-east-1";
+            String endpoint = s3Properties.getEndpoint();
+            if (endpoint != null && !endpoint.isBlank()) {
+                // Custom endpoint (e.g., MinIO, LocalStack)
+                builder.withEndpointConfiguration(
+                    new AwsClientBuilder.EndpointConfiguration(endpoint.trim(), regionStr)
+                );
+                builder.withPathStyleAccessEnabled(s3Properties.isPathStyleAccess());
+            } else {
+                // Standard AWS S3
+                builder.withRegion(regionStr);
+                if (s3Properties.isPathStyleAccess()) {
+                    builder.withPathStyleAccessEnabled(true);
+                }
+            }
+
+            return builder.build();
+        } catch (Exception e) {
+            log.error("S3 snapshot is enabled but failed to initialize S3 client. S3 snapshot features will be disabled.", e);
+            return null;
+        }
+    }
     /**
      * Create snapshot directory if it doesn't exist
      */
@@ -107,7 +178,7 @@ public class SnapshotService {
      * Creates binary snapshot for fastest recovery
      * Includes Kafka offsets if KafkaOffsetTracker is available
      */
-    @Scheduled(fixedRate = 10000) // 10 seconds = 10000 milliseconds
+    @Scheduled(fixedRateString = "#{${snapshot.interval.seconds:10} * 1000}")
     public void createSnapshot() {
         log.info("Starting snapshot creation...");
         if (!snapshotEnabled) {
@@ -125,7 +196,7 @@ public class SnapshotService {
             Map<Integer, Long> kafkaOffsets = null;
             if (offsetTracker != null) {
                 kafkaOffsets = offsetTracker.getAllOffsets();
-                log.debug("Including Kafka offsets in snapshot: {}", kafkaOffsets);
+                log.info("Including Kafka offsets in snapshot: {}", kafkaOffsets);
             }
 
             // Create snapshot wrapper with order book data and offsets
@@ -141,6 +212,9 @@ public class SnapshotService {
                 oos.flush();
             }
 
+            // Upload to S3 (optional)
+            uploadSnapshotToS3IfConfigured(snapshotFile);
+
             long duration = System.currentTimeMillis() - startTime;
             log.info("Snapshot created in {}ms - File: {}, Markets: {}, Kafka offsets: {}",
                     duration, snapshotFile, snapshotData.size(),
@@ -148,6 +222,28 @@ public class SnapshotService {
 
         } catch (Exception e) {
             log.error("Error creating snapshot", e);
+        }
+    }
+
+    private void uploadSnapshotToS3IfConfigured(Path snapshotFile) {
+        if (s3Client == null) return;
+        String bucket = s3Properties.getBucket();
+        if (bucket == null || bucket.isBlank()) {
+            log.error("snapshot.s3.enabled=true but snapshot.s3.bucket is empty. Skipping S3 upload.");
+            return;
+        }
+
+        try {
+            PutObjectRequest req = new PutObjectRequest(bucket, s3Properties.getKey(), snapshotFile.toFile());
+            req.setMetadata(new com.amazonaws.services.s3.model.ObjectMetadata());
+            req.getMetadata().setContentType("application/octet-stream");
+
+            long start = System.currentTimeMillis();
+            s3Client.putObject(req);
+            long duration = System.currentTimeMillis() - start;
+            log.info("Uploaded snapshot to S3 in {}ms - s3://{}/{}", duration, bucket, s3Properties.getKey());
+        } catch (Exception e) {
+            log.error("Failed to upload snapshot to S3 (will keep local snapshot): s3://{}/{}", bucket, s3Properties.getKey(), e);
         }
     }
 
@@ -184,18 +280,40 @@ public class SnapshotService {
         try {
             Path snapshotFile = snapshotPath.resolve(SNAPSHOT_FILE);
 
-            if (!Files.exists(snapshotFile)) {
-                log.info("No snapshot file found at: {}", snapshotFile);
-                return null;
-            }
-
             long startTime = System.currentTimeMillis();
 
-            // Read binary snapshot (fastest read - no decompression)
-            try (ObjectInputStream ois = new ObjectInputStream(
-                    new BufferedInputStream(
-                            Files.newInputStream(snapshotFile)))) {
-                Object snapshotObject = ois.readObject();
+            Object snapshotObject = null;
+            boolean loadedFromS3 = false;
+
+            // Prefer S3 if configured, otherwise fall back to local
+            if (s3Properties.isPrefer() && s3Client != null) {
+                snapshotObject = loadSnapshotObjectFromS3();
+                loadedFromS3 = (snapshotObject != null);
+            }
+
+            if (snapshotObject == null) {
+                if (Files.exists(snapshotFile)) {
+                    // Read binary snapshot from local disk (fastest)
+                    try (ObjectInputStream ois = new ObjectInputStream(
+                            new BufferedInputStream(
+                                    Files.newInputStream(snapshotFile)))) {
+                        snapshotObject = ois.readObject();
+                    }
+                } else if (s3Client != null) {
+                    // If local file doesn't exist, try S3 as a fallback
+                    snapshotObject = loadSnapshotObjectFromS3();
+                    loadedFromS3 = (snapshotObject != null);
+                }
+            }
+
+            if (snapshotObject == null) {
+                String s3Location = s3Client != null 
+                        ? ("s3://" + s3Properties.getBucket() + "/" + s3Properties.getKey()) 
+                        : "disabled";
+                log.info("No snapshot found (local file missing and/or S3 unavailable). Local path: {}, S3: {}",
+                        snapshotFile, s3Location);
+                return null;
+            }
 
                 Map<Market, SerializableOrderBook> serializedSnapshot;
                 Map<Integer, Long> kafkaOffsets;
@@ -218,8 +336,11 @@ public class SnapshotService {
                 Map<Market, OrderBook> snapshot = convertToOrderBookMap(serializedSnapshot);
 
                 long duration = System.currentTimeMillis() - startTime;
+                String source = loadedFromS3 
+                        ? ("s3://" + s3Properties.getBucket() + "/" + s3Properties.getKey()) 
+                        : snapshotFile.toString();
                 log.info("Snapshot loaded in {}ms from: {}, Markets: {}, Kafka offsets: {}",
-                        duration, snapshotFile, snapshot.size(),
+                        duration, source, snapshot.size(),
                         kafkaOffsets != null ? kafkaOffsets.size() + " partitions" : "none");
 
                 // Replay messages from Kafka after the snapshot offsets to rebuild the orderbook
@@ -229,10 +350,46 @@ public class SnapshotService {
                 }
 
                 return snapshot;
-            }
 
         } catch (Exception e) {
             log.error("Error loading snapshot", e);
+            return null;
+        }
+    }
+
+    private Object loadSnapshotObjectFromS3() {
+        if (s3Client == null) return null;
+        String bucket = s3Properties.getBucket();
+        if (bucket == null || bucket.isBlank()) {
+            log.warn("snapshot.s3.enabled=true but snapshot.s3.bucket is empty. Skipping S3 download.");
+            return null;
+        }
+
+        try {
+            GetObjectRequest req = new GetObjectRequest(bucket, s3Properties.getKey());
+
+            long start = System.currentTimeMillis();
+            S3Object s3Object = s3Client.getObject(req);
+            try (S3ObjectInputStream s3is = s3Object.getObjectContent();
+                 InputStream bis = new BufferedInputStream(s3is)) {
+                
+                byte[] bytes = bis.readAllBytes();
+                long duration = System.currentTimeMillis() - start;
+                log.info("Downloaded snapshot from S3 in {}ms - s3://{}/{} ({} bytes)", duration, bucket, s3Properties.getKey(), bytes.length);
+
+                try (ObjectInputStream ois = new ObjectInputStream(new BufferedInputStream(new ByteArrayInputStream(bytes)))) {
+                    return ois.readObject();
+                }
+            }
+        } catch (com.amazonaws.services.s3.model.AmazonS3Exception e) {
+            if (e.getStatusCode() == 404) {
+                log.info("No snapshot object found in S3 at s3://{}/{}", bucket, s3Properties.getKey());
+            } else {
+                log.error("S3 error while downloading snapshot: s3://{}/{}", bucket, s3Properties.getKey(), e);
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to download/load snapshot from S3: s3://{}/{}", bucket, s3Properties.getKey(), e);
             return null;
         }
     }
