@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: main
+  
+  # Redis Configuration for User Data (Docker)
+  data:
+    redis:
+      host: redis
+      port: 6379
+      timeout: 2000ms
+  
+  # Kafka Configuration (main produces to order-events only)
+  # Using Docker service name and internal port
+  kafka:
+    bootstrap-servers: kafka:9092
+    producer:
+      acks: all
+      retries: 3
+      enable-idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    # SASL/PLAIN (main can produce to order-events)
+    security:
+      protocol: SASL_PLAINTEXT
+    sasl:
+      mechanism: PLAIN
+      username: main
+      password: main-secret
+
+# Server Configuration
+server:
+  port: 8084
+
+# Engine Service Configuration (Docker)
+# Using Docker service name and internal port
+engine:
+  api:
+    url: http://engine:8080/api
+    timeout: 5000
+
+# Kafka Topics
+kafka:
+  topics:
+    order-events: order-events
+
+# Logging Configuration
+logging:
+  level:
+    com.mine.main: INFO
+    org.springframework.kafka: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

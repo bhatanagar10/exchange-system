@@ -1,0 +1,99 @@
+spring:
+  application:
+    name: engine
+
+# RabbitMQ Configuration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: admin
+    virtual-host: /
+    listener:
+      simple:
+        auto-startup: true
+        acknowledge-mode: manual
+        # Synchronous processing settings - one message at a time
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 1
+
+# Kafka Configuration (order-events: consume only; main produces)
+  kafka:
+    bootstrap-servers: localhost:9072
+    consumer:
+      group-id: engine-order-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 1
+    producer:
+      acks: all
+      retries: 3
+      enable-idempotence: true
+    # SASL/PLAIN (engine can only consume from order-events)
+    security:
+      protocol: SASL_PLAINTEXT
+    sasl:
+      mechanism: PLAIN
+      username: engine
+      password: engine-secret
+
+# Snapshot Configuration
+snapshot:
+  path: data/snapshots
+  enabled: true
+  interval:
+    seconds: 10
+  # Snapshot S3 Configuration (optional)
+  # Enable this once you provide bucket/keys.
+  s3:
+    enabled: true
+    bucket: amzn-exchange-s3-bucket
+    region: ap-south-1
+    key: engine/stockData.snapshot
+    # If access/secret are empty, the app will use the default AWS credential chain (env/instance profile/etc.)
+    access-key: AKIA6KW7VOD4CFJAZ4GT
+    secret-key: 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
+    # Optional (useful for S3-compatible storage like MinIO)
+    # endpoint:
+    # path-style-access: false
+    # If true, loadSnapshot prefers S3 even if local file exists
+    prefer: true
+
+# Database Configuration
+  datasource:
+    url: ${DB_CONNECTION_STRING:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+
+# JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    # spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        format_sql: true
+
+# Redis Configuration for Idempotency
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+server:
+  port: 8080
+
+# Messaging Provider Configuration
+# Set to "rabbitmq" or "kafka" to switch between messaging systems
+# Default: kafka
+messaging:
+  provider: kafka

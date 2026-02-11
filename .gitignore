@@ -4,3 +4,6 @@ engine/target
 db-sync/target
 **/.gitattributes
 engine/.gitattributes
+main/target
+.idea
+.mvn

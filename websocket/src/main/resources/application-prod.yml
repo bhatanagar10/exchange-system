@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: websocket
+  
+  # RabbitMQ Configuration (Docker)
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: admin
+    password: admin
+    virtual-host: /
+
+# STOMP Broker Relay Configuration (Docker)
+stomp:
+  broker:
+    relay-host: rabbitmq
+    relay-port: 61613
+    client-login: admin
+    client-passcode: admin
+    system-login: admin
+    system-passcode: admin
+
+server:
+  port: 8081
+
+websocket:
+  # WebSocket URL for orderbook page
+  # Can be overridden via environment variable WEBSOCKET_URL
+  # For EC2: Set to http://<ec2-public-ip>:8081/ws or http://<domain>:8081/ws
+  # For Docker local: Use /ws (relative) or http://localhost:8081/ws
+  # Default: relative URL /ws (works when HTML is served from same host)
+  url: ${WEBSOCKET_URL:/ws}
+  # CORS allowed origins (comma-separated)
+  # For EC2: Set to specific domain/IP, e.g., http://your-domain.com,http://ec2-ip:8081
+  # Default: * (allows all origins)
+  allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:*}

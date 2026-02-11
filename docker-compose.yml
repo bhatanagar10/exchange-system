@@ -213,6 +213,13 @@ services:
       SPRING_RABBITMQ_PORT: 5672
       STOMP_BROKER_RELAY_HOST: rabbitmq
       STOMP_BROKER_RELAY_PORT: 61613
+      # WebSocket URL for orderbook page (for EC2 deployment)
+      # Set to EC2 public IP or domain: http://<ec2-ip>:8081/ws or http://<domain>:8081/ws
+      # Leave empty/unset to use relative URL /ws
+      WEBSOCKET_URL: ${WEBSOCKET_URL:-}
+      # CORS allowed origins (comma-separated, optional)
+      # For EC2: Set to restrict access, e.g., http://your-domain.com
+      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-*}
     depends_on:
       rabbitmq:
         condition: service_healthy

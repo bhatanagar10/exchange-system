@@ -1,0 +1,95 @@
+spring:
+  application:
+    name: trading-bot
+  
+  # RabbitMQ Configuration (Docker)
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: admin
+    password: admin
+    virtual-host: /
+
+  # Kafka Configuration (Docker)
+  # Using Docker service name and internal port
+  kafka:
+    bootstrap-servers: kafka:9092
+    producer:
+      acks: all
+      retries: 3
+      enable-idempotence: true
+  
+# Server Configuration
+server:
+  port: 8082
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+# Trading Bot Configuration (Docker)
+# Using Docker service names and internal ports
+trading-bot:
+  exchange:
+    api-url: http://main:8084/api
+    websocket-url: http://websocket:8081/ws
+    timeout: 5000
+    max-retries: 3
+    retry-delay-ms: 1000
+  
+  rabbitmq:
+    exchange: engine.test.exchange
+    routing-key: engine.test.routing.key
+    queue: engine.test.queue
+
+  kafka:
+    topic: order-events
+  
+  execution:
+    thread-pool-size: 20
+    rate-limit-per-minute: 100
+    bot-execution-interval-ms: 15000
+  
+  strategy:
+    market-maker-spread: 0.005      # 0.5% spread
+    trend-ma-short: 5               # 5 minutes moving average
+    trend-ma-long: 15               # 15 minutes moving average
+    mean-reversion-period: 30       # 30 minutes lookback
+    momentum-threshold: 0.03        # 3% price change trigger
+    scalper-profit-target: 0.002    # 0.2% profit target
+    range-buffer-percent: 0.01      # 1% buffer from support/resistance
+  
+  simulation:
+    default-trading-pair: BTC
+    min-order-size: 1
+    max-order-size: 100
+    initial-bot-balance: 100000.0
+  
+  safety:
+    max-loss-percent: 0.20          # Stop bot at 20% loss
+    circuit-breaker-threshold: 0.30 # Stop all bots at 30% error rate
+    circuit-breaker-window-ms: 60000
+    max-active-orders-per-bot: 10
+  
+  behavior:
+    reaction-delay-min-ms: 5000     # Minimum 5 second delay
+    reaction-delay-max-ms: 30000    # Maximum 30 second delay
+    skip-trade-probability: 0.18    # 18% chance to miss opportunity
+    order-size-variance: 0.30       # ±30% order size variance
+    price-slippage-percent: 0.002   # ±0.2% price variance
+    mistake-probability: 0.05        # 5% chance for fat-finger error
+    inactive-period-probability: 0.10 # 10% chance to go inactive
+
+# Logging Configuration
+logging:
+  level:
+    com.trading.bot: DEBUG
+    org.springframework.amqp: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

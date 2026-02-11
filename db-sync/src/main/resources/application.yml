@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: db-sync
+
+# Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9072
+    consumer:
+      group-id: db-sync-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: "*"
+      max-poll-records: 1
+    # SASL/PLAIN (required - broker uses SASL; db-sync consumes from order-db-sync, transaction-db-sync)
+    security:
+      protocol: SASL_PLAINTEXT
+    sasl:
+      mechanism: PLAIN
+      username: dbsync
+      password: dbsync-secret
+
+# Database Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: root
+    driver-class-name: org.postgresql.Driver
+
+# JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    # spring.jpa.show-sql=true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# Logging
+logging:
+  level:
+    com.mine.ordersync: INFO
+    org.springframework.kafka: INFO
+    org.hibernate.SQL: DEBUG
+
+# Server Configuration
+server:
+  port: 8083

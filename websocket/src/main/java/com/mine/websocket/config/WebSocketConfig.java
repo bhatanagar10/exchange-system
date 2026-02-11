@@ -29,6 +29,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${stomp.broker.system-passcode:admin}")
     private String systemPasscode;
 
+    @Value("${websocket.allowed-origins:*}")
+    private String allowedOrigins;
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         // Enable RabbitMQ as external message broker via STOMP
@@ -48,13 +51,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Register WebSocket endpoint at /ws
+        // CORS origins can be configured via websocket.allowed-origins property
+        // Default: * (allows all origins) - for EC2, you may want to restrict this
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(allowedOrigins.split(","))
                 .withSockJS();
         
         // Also register without SockJS for native WebSocket clients
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns(allowedOrigins.split(","));
     }
 }
 
