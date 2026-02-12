@@ -35,6 +35,7 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -177,6 +178,7 @@ public class SnapshotService {
      * Scheduled snapshot - runs every 10 seconds
      * Creates binary snapshot for fastest recovery
      * Includes Kafka offsets if KafkaOffsetTracker is available
+     * Writes directly to S3 only (no local file fallback)
      */
     @Scheduled(fixedRateString = "#{${snapshot.interval.seconds:10} * 1000}")
     public void createSnapshot() {
@@ -202,48 +204,76 @@ public class SnapshotService {
             // Create snapshot wrapper with order book data and offsets
             SnapshotData snapshotWrapper = new SnapshotData(snapshotData, kafkaOffsets);
 
-            // Write to binary file (fastest format - no compression)
-            Path snapshotFile = snapshotPath.resolve(SNAPSHOT_FILE);
-
-            try (ObjectOutputStream oos = new ObjectOutputStream(
-                    new BufferedOutputStream(
-                            Files.newOutputStream(snapshotFile)))) {
+            // Serialize to byte array in memory
+            byte[] snapshotBytes;
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                 ObjectOutputStream oos = new ObjectOutputStream(
+                         new BufferedOutputStream(baos))) {
                 oos.writeObject(snapshotWrapper);
                 oos.flush();
+                snapshotBytes = baos.toByteArray();
             }
 
-            // Upload to S3 (optional)
-            uploadSnapshotToS3IfConfigured(snapshotFile);
-
-            long duration = System.currentTimeMillis() - startTime;
-            log.info("Snapshot created in {}ms - File: {}, Markets: {}, Kafka offsets: {}",
-                    duration, snapshotFile, snapshotData.size(),
-                    kafkaOffsets != null ? kafkaOffsets.size() + " partitions" : "none");
+            // Upload directly to S3 only
+            boolean uploadedToS3 = uploadSnapshotToS3Directly(snapshotBytes);
+            
+            if (!uploadedToS3) {
+                log.error("Failed to upload snapshot to S3. Snapshot not saved. Markets: {}, Kafka offsets: {}, Size: {} bytes",
+                        snapshotData.size(),
+                        kafkaOffsets != null ? kafkaOffsets.size() + " partitions" : "none",
+                        snapshotBytes.length);
+            } else {
+                long duration = System.currentTimeMillis() - startTime;
+                log.info("Snapshot uploaded to S3 in {}ms - Markets: {}, Kafka offsets: {}, Size: {} bytes",
+                        duration, snapshotData.size(),
+                        kafkaOffsets != null ? kafkaOffsets.size() + " partitions" : "none",
+                        snapshotBytes.length);
+            }
 
         } catch (Exception e) {
             log.error("Error creating snapshot", e);
         }
     }
 
-    private void uploadSnapshotToS3IfConfigured(Path snapshotFile) {
-        if (s3Client == null) return;
+    /**
+     * Upload snapshot directly to S3 from byte array
+     * @param snapshotBytes Serialized snapshot data
+     * @return true if uploaded successfully, false otherwise
+     */
+    private boolean uploadSnapshotToS3Directly(byte[] snapshotBytes) {
+        if (s3Client == null) {
+            return false;
+        }
+        
         String bucket = s3Properties.getBucket();
         if (bucket == null || bucket.isBlank()) {
-            log.error("snapshot.s3.enabled=true but snapshot.s3.bucket is empty. Skipping S3 upload.");
-            return;
+            log.warn("S3 client is available but bucket is not configured. Skipping S3 upload.");
+            return false;
         }
 
         try {
-            PutObjectRequest req = new PutObjectRequest(bucket, s3Properties.getKey(), snapshotFile.toFile());
-            req.setMetadata(new com.amazonaws.services.s3.model.ObjectMetadata());
-            req.getMetadata().setContentType("application/octet-stream");
+            // Create metadata
+            com.amazonaws.services.s3.model.ObjectMetadata metadata = new com.amazonaws.services.s3.model.ObjectMetadata();
+            metadata.setContentLength(snapshotBytes.length);
+            metadata.setContentType("application/octet-stream");
+
+            // Create request with byte array input stream
+            PutObjectRequest req = new PutObjectRequest(
+                    bucket, 
+                    s3Properties.getKey(), 
+                    new ByteArrayInputStream(snapshotBytes),
+                    metadata
+            );
 
             long start = System.currentTimeMillis();
             s3Client.putObject(req);
             long duration = System.currentTimeMillis() - start;
-            log.info("Uploaded snapshot to S3 in {}ms - s3://{}/{}", duration, bucket, s3Properties.getKey());
+            log.info("Uploaded snapshot directly to S3 in {}ms - s3://{}/{} ({} bytes)", 
+                    duration, bucket, s3Properties.getKey(), snapshotBytes.length);
+            return true;
         } catch (Exception e) {
-            log.error("Failed to upload snapshot to S3 (will keep local snapshot): s3://{}/{}", bucket, s3Properties.getKey(), e);
+            log.error("Failed to upload snapshot to S3: s3://{}/{}", bucket, s3Properties.getKey(), e);
+            return false;
         }
     }
 
@@ -270,7 +300,7 @@ public class SnapshotService {
     }
 
     /**
-     * Load snapshot from disk - fastest binary read
+     * Load snapshot from S3 only
      * Also restores Kafka offsets if available in snapshot and KafkaOffsetTracker is available
      *
      * @return Map<Market, OrderBook> if found, null otherwise
@@ -278,40 +308,20 @@ public class SnapshotService {
     @SuppressWarnings("unchecked")
     public Map<Market, OrderBook> loadSnapshot() {
         try {
-            Path snapshotFile = snapshotPath.resolve(SNAPSHOT_FILE);
-
             long startTime = System.currentTimeMillis();
 
             Object snapshotObject = null;
-            boolean loadedFromS3 = false;
 
-            // Prefer S3 if configured, otherwise fall back to local
-            if (s3Properties.isPrefer() && s3Client != null) {
+            // Load from S3 only
+            if (s3Client != null) {
                 snapshotObject = loadSnapshotObjectFromS3();
-                loadedFromS3 = (snapshotObject != null);
-            }
-
-            if (snapshotObject == null) {
-                if (Files.exists(snapshotFile)) {
-                    // Read binary snapshot from local disk (fastest)
-                    try (ObjectInputStream ois = new ObjectInputStream(
-                            new BufferedInputStream(
-                                    Files.newInputStream(snapshotFile)))) {
-                        snapshotObject = ois.readObject();
-                    }
-                } else if (s3Client != null) {
-                    // If local file doesn't exist, try S3 as a fallback
-                    snapshotObject = loadSnapshotObjectFromS3();
-                    loadedFromS3 = (snapshotObject != null);
-                }
             }
 
             if (snapshotObject == null) {
                 String s3Location = s3Client != null 
                         ? ("s3://" + s3Properties.getBucket() + "/" + s3Properties.getKey()) 
                         : "disabled";
-                log.info("No snapshot found (local file missing and/or S3 unavailable). Local path: {}, S3: {}",
-                        snapshotFile, s3Location);
+                log.info("No snapshot found in S3. S3 location: {}", s3Location);
                 return null;
             }
 
@@ -336,9 +346,7 @@ public class SnapshotService {
                 Map<Market, OrderBook> snapshot = convertToOrderBookMap(serializedSnapshot);
 
                 long duration = System.currentTimeMillis() - startTime;
-                String source = loadedFromS3 
-                        ? ("s3://" + s3Properties.getBucket() + "/" + s3Properties.getKey()) 
-                        : snapshotFile.toString();
+                String source = "s3://" + s3Properties.getBucket() + "/" + s3Properties.getKey();
                 log.info("Snapshot loaded in {}ms from: {}, Markets: {}, Kafka offsets: {}",
                         duration, source, snapshot.size(),
                         kafkaOffsets != null ? kafkaOffsets.size() + " partitions" : "none");
