@@ -91,8 +91,8 @@ snapshot:
     region: ap-south-1
     key: engine/stockData.snapshot
     # If access/secret are empty, the app will use the default AWS credential chain (env/instance profile/etc.)
-    access-key: ${KEY}
-    secret-key: ${KEY}
+    access-key: AKIA6KW7VOD4CFJAZ4GT
+    secret-key: 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
     # Optional (useful for S3-compatible storage like MinIO)
     # endpoint:
     # path-style-access: false
