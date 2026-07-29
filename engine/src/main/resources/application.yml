@@ -90,7 +90,7 @@ snapshot:
           min-idle: 0
 
 server:
-  port: 8080
+  port: 8085
 
 # Messaging Provider Configuration
 # Set to "rabbitmq" or "kafka" to switch between messaging systems
