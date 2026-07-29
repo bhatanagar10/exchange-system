@@ -157,7 +157,7 @@ services:
       dockerfile: Dockerfile
     container_name: engine
     ports:
-      - "8080:8080"
+      - "8085:8085"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
