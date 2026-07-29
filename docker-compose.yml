@@ -16,29 +16,29 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
       # Advertised listeners: internal uses service name, external uses localhost
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9072
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       # SASL Configuration - Username/Password Required
-      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
-      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
+#      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+#      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
       # JAAS Configuration for SASL/PLAIN
       # Users: admin (super user), engine, main, tradingbot
-      KAFKA_LISTENER_NAME_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_engine="engine-secret" user_main="main-secret" user_tradingbot="tradingbot-secret" user_dbsync="dbsync-secret";
-      KAFKA_LISTENER_NAME_EXTERNAL_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_engine="engine-secret" user_main="main-secret" user_tradingbot="tradingbot-secret" user_dbsync="dbsync-secret";
+#      KAFKA_LISTENER_NAME_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_engine="engine-secret" user_main="main-secret" user_tradingbot="tradingbot-secret" user_dbsync="dbsync-secret";
+#      KAFKA_LISTENER_NAME_EXTERNAL_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_engine="engine-secret" user_main="main-secret" user_tradingbot="tradingbot-secret" user_dbsync="dbsync-secret";
       # ACL Configuration - "Close the Door" Security
       # StandardAuthorizer enables ACL-based authorization
-      KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
+      # KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
       # admin = ACL/topic admin; User:1 = broker node (KRaft node id); User:ANONYMOUS = controller listener (PLAINTEXT)
-      KAFKA_SUPER_USERS: User:admin;User:1;User:ANONYMOUS
+      # KAFKA_SUPER_USERS: User:admin;User:1;User:ANONYMOUS
       # Deny by default - topics are closed unless explicitly allowed
-      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+      # KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
       # Topic Configuration
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       # Disable auto topic creation - topics must be created manually
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+#      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_NUM_PARTITIONS: 1
       # Log directories for KRaft
       KAFKA_LOG_DIRS: /var/lib/kafka/data
@@ -46,6 +46,11 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka/data
     user: "0:0"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '2.0'
     networks:
       - kafka-network
 
@@ -60,10 +65,15 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       # SASL Configuration for Kafka UI
-      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
-      KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
-      KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
+#      KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
+#      KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
       DYNAMIC_CONFIG_ENABLED: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '0.5'
     networks:
       - kafka-network
     healthcheck:
@@ -80,6 +90,11 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '0.25'
     networks:
       - kafka-network
     healthcheck:
@@ -99,6 +114,11 @@ services:
       POSTGRES_DB: postgres
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '0.5'
     networks:
       - kafka-network
     healthcheck:
@@ -118,6 +138,11 @@ services:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
     command: sh -c "rabbitmq-plugins enable rabbitmq_stomp && rabbitmq-server"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '0.5'
     networks:
       - kafka-network
     healthcheck:
@@ -152,6 +177,11 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '1.0'
     networks:
       - kafka-network
 
@@ -175,6 +205,11 @@ services:
         condition: service_healthy
       engine:
         condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '1.0'
     networks:
       - kafka-network
 
@@ -196,6 +231,11 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '1.0'
     networks:
       - kafka-network
 
@@ -222,6 +262,11 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '1.0'
     networks:
       - kafka-network
 
